@@ -10,7 +10,7 @@ import Footer from '@/components/layout/Footer';
 export const metadata: Metadata = {
   title: 'Evently - Find Your Next Event',
   description: 'Discover and manage events with Evently.',
-  icons: null, // Explicitly disable automatic icon generation
+  // icons: null, // Explicitly disable automatic icon generation - REMOVED
 };
 
 export default function RootLayout({
@@ -44,5 +44,3 @@ export default function RootLayout({
     </html>
   );
 }
-
-    

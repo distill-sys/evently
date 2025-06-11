@@ -1,9 +1,11 @@
+
 'use client';
 
 import Link from 'next/link';
-import { Button } from '@/components/ui/button';
+import { Button, buttonVariants } from '@/components/ui/button'; // Import buttonVariants
 import { useAuth } from '@/contexts/AuthContext';
 import { Ticket, LogIn, UserPlus, LogOut, UserCircle2, Settings, Briefcase } from 'lucide-react';
+import type { VariantProps } from 'class-variance-authority'; // For buttonVariants types
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -12,6 +14,11 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { cn } from '@/lib/utils';
+
+// Helper to get className from buttonVariants
+const getButtonClasses = (props: VariantProps<typeof buttonVariants>) => cn(buttonVariants(props));
+
 
 export default function Header() {
   const { user, role, logout } = useAuth();
@@ -23,27 +30,20 @@ export default function Header() {
           <Ticket className="h-8 w-8 text-primary" />
           <span className="text-2xl font-headline font-semibold text-primary">Evently</span>
         </Link>
-        <nav className="flex items-center gap-4">
+        <nav className="flex items-center gap-2 md:gap-4"> {/* Added md:gap-4 for better spacing on larger screens */}
           {user ? (
             <>
               {role === 'attendee' && (
-                <Button variant="ghost" asChild>
-                  <Link href="/attendee">Browse Events</Link>
-                </Button>
+                <Link href="/attendee" className={getButtonClasses({ variant: "ghost" })}>Browse Events</Link>
               )}
                {role === 'organizer' && (
-                <Button variant="ghost" asChild>
-                  {/* Placeholder for organizer dashboard/events page */}
-                  <Link href={`/organizer/${user.id}`}>My Dashboard</Link>
-                </Button>
+                <Link href={`/organizer/${user.id}`} className={getButtonClasses({ variant: "ghost" })}>My Dashboard</Link>
               )}
               {role === 'admin' && (
-                <Button variant="ghost" asChild>
-                  <Link href="/admin">Admin Panel</Link>
-                </Button>
+                <Link href="/admin" className={getButtonClasses({ variant: "ghost" })}>Admin Panel</Link>
               )}
-              {!role && user && ( // If logged in but role not selected yet (on /dashboard)
-                <span className="text-sm text-muted-foreground">Welcome, {user.name}!</span>
+              {!role && user && ( 
+                <span className="text-sm text-muted-foreground hidden md:inline">Welcome, {user.name}!</span>
               )}
 
               <DropdownMenu>
@@ -71,7 +71,7 @@ export default function Header() {
                       Logout
                     </DropdownMenuItem>
                   )}
-                   {!role && ( // If on dashboard page before role selection
+                   {!role && ( 
                      <DropdownMenuItem onSelect={() => logout()} className="font-body cursor-pointer text-destructive focus:text-destructive focus:bg-destructive/10">
                       <LogOut className="mr-2 h-4 w-4" />
                       Logout
@@ -82,15 +82,13 @@ export default function Header() {
             </>
           ) : (
             <>
-              <Button variant="ghost" asChild>
-                <Link href="/attendee">Browse Events</Link>
-              </Button>
-              <Button variant="outline" asChild>
-                <Link href="/login"><LogIn className="mr-2 h-4 w-4" />Login</Link>
-              </Button>
-              <Button asChild>
-                <Link href="/sign-up"><UserPlus className="mr-2 h-4 w-4" />Sign Up</Link>
-              </Button>
+              <Link href="/attendee" className={getButtonClasses({ variant: "ghost", size: "default" }) + " hidden sm:inline-flex"}>Browse Events</Link>
+              <Link href="/login" className={getButtonClasses({ variant: "outline", size: "default" })}>
+                <LogIn className="mr-0 sm:mr-2 h-4 w-4" /><span className="hidden sm:inline">Login</span>
+              </Link>
+              <Link href="/sign-up" className={getButtonClasses({ variant: "default", size: "default" })}>
+                <UserPlus className="mr-0 sm:mr-2 h-4 w-4" /><span className="hidden sm:inline">Sign Up</span>
+              </Link>
             </>
           )}
         </nav>
