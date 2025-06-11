@@ -49,7 +49,7 @@ export default function AdminAnalyticsPage() {
             supabase.from('users').select('*', { count: 'exact', head: true }),
             supabase.from('events').select('*', { count: 'exact', head: true }),
             supabase.from('venues').select('*', { count: 'exact', head: true }),
-            supabase.from('users').select('role, count:id').group('role') // Corrected line
+            supabase.from('users').select('role, count()').group('role') // Use count()
           ]);
 
           if (usersCountRes.error) throw usersCountRes.error;
@@ -65,7 +65,7 @@ export default function AdminAnalyticsPage() {
           
           const formattedRolesData = (userRolesRes.data || []).map(item => ({
             role: item.role || 'Unknown',
-            count: item.count || 0,
+            count: item.count || 0, // Supabase should return a 'count' field from count()
           }));
           setUserRoleData(formattedRolesData as UserRoleDistribution[]);
 
