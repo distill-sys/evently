@@ -29,14 +29,16 @@ export default function LoginPage() {
   const { signIn, isLoading: authLoading, user } = useAuth();
   const [showPassword, setShowPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isAttemptingRedirect, setIsAttemptingRedirect] = useState(false);
   const router = useRouter();
 
   useEffect(() => {
     // Redirect if user is already logged in
-    if (!authLoading && user) {
+    if (!authLoading && user && !isAttemptingRedirect) {
+      setIsAttemptingRedirect(true);
       router.push('/dashboard');
     }
-  }, [authLoading, user, router]);
+  }, [authLoading, user, router, isAttemptingRedirect]);
 
   const form = useForm<z.infer<typeof loginSchema>>({
     resolver: zodResolver(loginSchema),

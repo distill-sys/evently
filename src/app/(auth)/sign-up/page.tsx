@@ -2,7 +2,7 @@
 'use client';
 
 import React from 'react';
-import { useState, useEffect } from 'react'; // Added useEffect
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
@@ -47,6 +47,7 @@ export default function SignUpPage() {
   const { signUp, isLoading: authLoading, user } = useAuth();
   const [showPassword, setShowPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isAttemptingRedirect, setIsAttemptingRedirect] = useState(false);
   const router = useRouter();
 
   const currentSchema = selectedRole === 'organizer' ? organizerSchema : (selectedRole === 'admin' ? adminSchema : attendeeSchema);
@@ -64,16 +65,17 @@ export default function SignUpPage() {
     context: { role: selectedRole },
   });
 
-  useEffect(() => {
+  React.useEffect(() => {
     form.trigger();
   }, [selectedRole, form]);
 
   useEffect(() => {
-    // Redirect if user is already logged in
-    if (!authLoading && user) {
+    // Redirect if user is already logged in or has just signed up successfully
+    if (!authLoading && user && !isAttemptingRedirect) {
+      setIsAttemptingRedirect(true);
       router.push('/dashboard');
     }
-  }, [authLoading, user, router]);
+  }, [authLoading, user, router, isAttemptingRedirect]);
 
   async function onSubmit(values: CombinedSchemaType) {
     setIsSubmitting(true);
@@ -88,6 +90,7 @@ export default function SignUpPage() {
 
     await signUp(userDetailsForSignUp, role as UserRole, password);
     setIsSubmitting(false);
+    // Redirection is handled by the useEffect above based on authLoading and user state
   }
 
   const handleRoleChange = (value: string) => {
@@ -105,7 +108,7 @@ export default function SignUpPage() {
 
   const currentLoading = authLoading || isSubmitting;
 
-  // Show loading spinner if redirecting
+  // Show loading spinner if redirecting (i.e., user is set and authLoading is false)
   if (!authLoading && user) {
      return (
       <div className="flex flex-col items-center justify-center min-h-[calc(100vh-10rem)]">
