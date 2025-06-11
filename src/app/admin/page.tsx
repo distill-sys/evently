@@ -5,7 +5,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useRouter } from 'next/navigation';
 import { useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { ShieldCheck, Users, BarChart3, Settings, Loader2 } from 'lucide-react';
+import { ShieldCheck, Users, BarChart3, Settings, Building, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
 
@@ -56,6 +56,20 @@ export default function AdminPage() {
         <Card className="hover:shadow-lg transition-shadow">
           <CardHeader>
             <CardTitle className="font-headline text-xl flex items-center">
+              <Building className="mr-2 h-5 w-5 text-primary" /> Venue Management
+            </CardTitle>
+            <CardDescription className="font-body">Add, edit, and manage event venues.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Button className="w-full font-body" asChild>
+              <Link href="/admin/venues">Manage Venues</Link>
+            </Button>
+          </CardContent>
+        </Card>
+
+        <Card className="hover:shadow-lg transition-shadow">
+          <CardHeader>
+            <CardTitle className="font-headline text-xl flex items-center">
               <BarChart3 className="mr-2 h-5 w-5 text-primary" /> Event Oversight
             </CardTitle>
             <CardDescription className="font-body">Monitor event listings and platform statistics.</CardDescription>
@@ -90,3 +104,4 @@ export default function AdminPage() {
     </div>
   );
 }
+```

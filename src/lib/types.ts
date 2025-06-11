@@ -1,4 +1,5 @@
 
+
 export type UserRole = 'attendee' | 'organizer' | 'admin';
 
 // Represents the structure in your 'users' table
@@ -62,3 +63,27 @@ export interface SavedCard {
   expiryDate: string; // "MM/YY"
   cardType: string; // "Visa", "Mastercard", etc.
 }
+
+// Represents the structure in your 'venues' table
+export interface Venue {
+  venue_id: string; // Primary Key
+  name: string;
+  address: string;
+  city: string;
+  state_province?: string | null;
+  country: string;
+  capacity?: number | null;
+  description?: string | null;
+  amenities?: string[] | null; // Array of strings
+  contact_email?: string | null;
+  contact_phone?: string | null;
+  image_url?: string | null;
+  created_by: string; // UUID of admin user who created it
+  created_at?: string;
+  updated_at?: string;
+  // Optional: include creator's name if joining with users table
+  creator?: {
+    name: string;
+  } | null;
+}
+```
