@@ -31,12 +31,23 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const fetchUserProfile = useCallback(async (supabaseUser: SupabaseUser): Promise<User | null> => {
     const { data: profile, error } = await supabase
       .from('users')
-      .select('name, role, organizationName, bio')
+      .select('name, role, organization_name, bio, profile_picture_url') // Use snake_case for DB columns
       .eq('auth_user_id', supabaseUser.id)
       .single();
 
     if (error && error.code !== 'PGRST116') { // PGRST116: no rows found
-      console.error('Error fetching user profile:', error);
+      console.error(
+        'Error fetching user profile. Message:', error.message,
+        'Details:', error.details,
+        'Hint:', error.hint,
+        'Code:', error.code
+      );
+      // Check if the error object is effectively empty or lacks specific details
+      if (Object.keys(error).length === 0 || (!error.message && !error.details && !error.hint && !error.code)) {
+          console.error('Full error object was empty or lacked specific details. This often indicates RLS (though disabled here) or a malformed query (e.g., incorrect column names). Querying for columns: name, role, organization_name, bio, profile_picture_url. Filter: auth_user_id =', supabaseUser.id);
+      } else {
+          console.error('Full error object:', JSON.stringify(error, null, 2));
+      }
       toast({ title: 'Error', description: 'Could not fetch user profile.', variant: 'destructive' });
       return null;
     }
@@ -47,8 +58,9 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         email: supabaseUser.email || '',
         name: profile.name,
         role: profile.role as UserRole,
-        organizationName: profile.organizationName,
-        bio: profile.bio,
+        organizationName: profile.organization_name, // Map from DB snake_case to app camelCase
+        bio: profile.bio,                           // Map from DB snake_case to app camelCase
+        profilePictureUrl: profile.profile_picture_url, // Map from DB snake_case to app camelCase
       };
     }
     return null; // Profile not yet created or not found
@@ -64,19 +76,12 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
           setUser(userProfile);
           setRole(userProfile.role || null);
         } else {
-          // User is authenticated with Supabase, but no profile in our DB yet
-          // This can happen if sign-up process was interrupted or if it's an old user
-          // Set basic user info from Supabase, role will be null
           setUser({
             id: session.user.id,
             email: session.user.email || '',
-            name: session.user.email?.split('@')[0] || 'User', // Placeholder name
+            name: session.user.email?.split('@')[0] || 'User', 
           });
           setRole(null);
-          // If no role, they should be directed to /dashboard to select one (or create profile)
-          if (router.pathname !== '/dashboard' && router.pathname !== '/sign-up' && router.pathname !== '/login') {
-             // router.push('/dashboard'); // Let page specific useEffects handle this more gracefully
-          }
         }
       } else {
         setUser(null);
@@ -84,22 +89,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       }
       setIsLoading(false);
     });
-
-    // Check initial session
-    // supabase.auth.getSession().then(({ data: { session } }) => {
-    //   if (session?.user) {
-    //     fetchUserProfile(session.user).then(userProfile => {
-    //       if (userProfile) {
-    //         setUser(userProfile);
-    //         setRole(userProfile.role || null);
-    //       }
-    //       setIsLoading(false);
-    //     });
-    //   } else {
-    //     setIsLoading(false);
-    //   }
-    // });
-
 
     return () => {
       authListener?.subscription.unsubscribe();
@@ -114,10 +103,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       toast({ title: 'Login Failed', description: error.message, variant: 'destructive'});
     } else {
       toast({ title: 'Logged In!', description: 'Welcome back!' });
-      // onAuthStateChange will handle setting user and role, then page effects will redirect.
-      // No direct router.push here needed if pages handle their redirects based on auth state.
-      // However, a common pattern is to push to dashboard if login page initiated it.
-      // For now, let onAuthStateChange and page logic handle it.
     }
     return { error };
   };
@@ -149,36 +134,32 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         email: signUpData.user.email,
         name: userData.name || 'New User',
         role: selectedRole,
-        organizationName: selectedRole === 'organizer' ? userData.organizationName : null,
-        bio: selectedRole === 'organizer' ? userData.bio : null,
+        organization_name: selectedRole === 'organizer' ? userData.organizationName : null, // Use snake_case for DB column
+        bio: selectedRole === 'organizer' ? userData.bio : null, // Use snake_case for DB column
+        profile_picture_url: userData.profilePictureUrl || null, // Use snake_case for DB column
       });
 
       if (insertError) {
         setIsLoading(false);
-        // Potentially roll back Supabase auth user or notify admin, but for now, just error
         console.error("Error inserting user profile:", insertError);
         toast({ title: 'Sign Up Failed', description: `Could not create user profile: ${insertError.message}`, variant: 'destructive'});
-        // Try to sign out the user if profile creation failed.
         await supabase.auth.signOut();
         return { error: { name: "ProfileCreationError", message: insertError.message } as AuthError };
       }
       
-      // User is signed up and profile created. onAuthStateChange should pick them up.
-      // Forcing a refresh of user state based on the newly created user.
       const newUserProfile = await fetchUserProfile(signUpData.user);
       if (newUserProfile) {
         setUser(newUserProfile);
         setRole(newUserProfile.role || null);
         toast({ title: 'Account Created!', description: `Welcome, ${newUserProfile.name}!` });
       } else {
-         // Fallback if fetchUserProfile fails immediately after insert (should be rare)
          setUser({ id: signUpData.user.id, email: signUpData.user.email!, name: userData.name || "User"});
          setRole(selectedRole);
          toast({ title: 'Account Created! Profile pending.', description: `Welcome!` });
       }
     }
     setIsLoading(false);
-    return { error: null }; // Success
+    return { error: null }; 
   };
 
   const logout = async () => {
@@ -210,12 +191,12 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       setIsLoading(false);
       toast({ title: 'Role Selected', description: `Your role has been set to ${selectedRole}.` });
       
-      // Redirect based on new role
       switch (selectedRole) {
         case 'attendee':
           router.push('/attendee');
           break;
         case 'organizer':
+          // Ensure user.id is used for the organizer page route if it represents the auth_user_id
           router.push(`/organizer/${user.id}`);
           break;
         case 'admin':
@@ -230,7 +211,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   return (
     <AuthContext.Provider value={{ user, role, isLoading, signIn, logout, selectRole, signUp }}>
       {!isLoading && children}
-      {isLoading && ( /* Optional: Global loading indicator can be placed here or handled by Toaster/individual pages */
+      {isLoading && ( 
         <div className="fixed inset-0 bg-background/80 flex items-center justify-center z-[200]">
           {/* <Loader2 className="h-10 w-10 animate-spin text-primary" /> */}
         </div>
@@ -246,5 +227,4 @@ export const useAuth = () => {
   }
   return context;
 };
-
     
