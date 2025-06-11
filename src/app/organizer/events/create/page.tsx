@@ -15,7 +15,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import type { Venue } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, ArrowLeft, PlusCircle, CalendarIcon, Home } from 'lucide-react';
+import { Loader2, ArrowLeft, PlusCircle, CalendarIcon } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -28,17 +28,19 @@ const eventSchema = z.object({
   date: z.date({ required_error: "Event date is required." }),
   time: z.string().regex(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9](\s(AM|PM))?$/, { message: "Invalid time format (e.g., 10:00 AM or 14:30)." }),
   location: z.string().min(3, { message: "Location is required if no venue is selected." }),
-  venue_id: z.string().optional().nullable(),
+  venue_id: z.string().uuid({ message: "Invalid venue ID." }).optional().nullable(),
   category: z.string().min(2, { message: "Category is required." }),
   ticketPriceRange: z.string().min(1, { message: "Ticket price/range is required (e.g., Free, $20, $15-$40)." }),
   imageUrl: z.string().url({ message: "Invalid image URL." }).optional().or(z.literal('')),
-}).refine(data => data.venue_id || data.location, { // Ensure location is provided if no venue_id
+}).refine(data => data.venue_id || data.location, {
     message: "Either a venue must be selected or a location manually entered.",
     path: ["location"], 
 });
 
 
 type EventFormData = z.infer<typeof eventSchema>;
+
+const NO_VENUE_SENTINEL_VALUE = "--no-venue--"; // Sentinel value for 'No venue' option
 
 export default function CreateEventPage() {
   const { user: authUser, role: authRole, isLoading: authLoading } = useAuth();
@@ -104,7 +106,7 @@ export default function CreateEventPage() {
       description: data.description,
       date: format(data.date, 'yyyy-MM-dd'),
       time: data.time,
-      location: data.location, // Keep location, it might be more specific or for online events
+      location: data.location, 
       venue_id: data.venue_id || null,
       category: data.category,
       ticket_price_range: data.ticketPriceRange,
@@ -247,8 +249,8 @@ export default function CreateEventPage() {
                   <FormItem>
                     <FormLabel className="font-headline">Venue (Optional)</FormLabel>
                     <Select
-                        onValueChange={(value) => field.onChange(value === "" ? null : value)}
-                        value={field.value || ""}
+                        onValueChange={(value) => field.onChange(value === NO_VENUE_SENTINEL_VALUE ? null : value)}
+                        value={field.value || ""} // If field.value is null, Select shows placeholder
                         disabled={isLoadingVenues}
                     >
                       <FormControl>
@@ -258,7 +260,9 @@ export default function CreateEventPage() {
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        <SelectItem value="" className="font-body text-muted-foreground italic">No specific venue / Online</SelectItem>
+                        <SelectItem value={NO_VENUE_SENTINEL_VALUE} className="font-body text-muted-foreground italic">
+                          No specific venue / Online
+                        </SelectItem>
                         {venues.map((venue) => (
                           <SelectItem key={venue.venue_id} value={venue.venue_id} className="font-body">
                             {venue.name}
