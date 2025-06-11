@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
@@ -18,7 +18,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { useAuth } from '@/contexts/AuthContext';
 import { Eye, EyeOff, Loader2 } from 'lucide-react';
-import { useRouter } from 'next/navigation'; // Import useRouter
+import { useRouter } from 'next/navigation';
 
 const loginSchema = z.object({
   email: z.string().email({ message: 'Invalid email address.' }),
@@ -26,10 +26,17 @@ const loginSchema = z.object({
 });
 
 export default function LoginPage() {
-  const { signIn, isLoading: authLoading, user } = useAuth(); // Renamed login to signIn
+  const { signIn, isLoading: authLoading, user } = useAuth();
   const [showPassword, setShowPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const router = useRouter(); // Initialize useRouter
+  const router = useRouter();
+
+  useEffect(() => {
+    // Redirect if user is already logged in
+    if (!authLoading && user) {
+      router.push('/dashboard');
+    }
+  }, [authLoading, user, router]);
 
   const form = useForm<z.infer<typeof loginSchema>>({
     resolver: zodResolver(loginSchema),
@@ -39,9 +46,17 @@ export default function LoginPage() {
     },
   });
 
-  // Redirect if user is already logged in
+  async function onSubmit(values: z.infer<typeof loginSchema>) {
+    setIsSubmitting(true);
+    await signIn(values.email, values.password);
+    setIsSubmitting(false);
+    // Redirection is handled by AuthContext's onAuthStateChange or the useEffect above
+  }
+
+  const currentLoading = authLoading || isSubmitting;
+
+  // Show loading spinner if redirecting
   if (!authLoading && user) {
-    router.push('/dashboard'); // Or any other appropriate page
     return (
       <div className="flex flex-col items-center justify-center min-h-[calc(100vh-10rem)]">
         <Loader2 className="h-12 w-12 animate-spin text-primary mb-4" />
@@ -49,17 +64,6 @@ export default function LoginPage() {
       </div>
     );
   }
-
-
-  async function onSubmit(values: z.infer<typeof loginSchema>) {
-    setIsSubmitting(true);
-    await signIn(values.email, values.password);
-    setIsSubmitting(false);
-    // Redirection is handled by AuthContext's onAuthStateChange or page-level useEffects now
-    // No explicit router.push here unless signIn returns specific routing instructions
-  }
-
-  const currentLoading = authLoading || isSubmitting;
 
   return (
     <>
@@ -134,5 +138,3 @@ export default function LoginPage() {
     </>
   );
 }
-
-    

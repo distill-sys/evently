@@ -1,8 +1,8 @@
 
 'use client';
 
-import React from 'react'; // Added this line
-import { useState } from 'react';
+import React from 'react';
+import { useState, useEffect } from 'react'; // Added useEffect
 import Link from 'next/link';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
@@ -51,7 +51,7 @@ export default function SignUpPage() {
 
   const currentSchema = selectedRole === 'organizer' ? organizerSchema : (selectedRole === 'admin' ? adminSchema : attendeeSchema);
 
-  const form = useForm<CombinedSchemaType>({ // Use combined type for form
+  const form = useForm<CombinedSchemaType>({
     resolver: zodResolver(currentSchema),
     defaultValues: {
       name: '',
@@ -61,31 +61,24 @@ export default function SignUpPage() {
       organizationName: '',
       organizerBio: '',
     },
-    context: { role: selectedRole }, // Pass role to context for conditional validation
+    context: { role: selectedRole },
   });
 
-  // Re-validate when schema changes
-  React.useEffect(() => {
+  useEffect(() => {
     form.trigger();
   }, [selectedRole, form]);
 
-
-  // Redirect if user is already logged in
-  if (!authLoading && user) {
-    router.push('/dashboard');
-     return (
-      <div className="flex flex-col items-center justify-center min-h-[calc(100vh-10rem)]">
-        <Loader2 className="h-12 w-12 animate-spin text-primary mb-4" />
-        <p className="text-xl font-body text-muted-foreground">Redirecting...</p>
-      </div>
-    );
-  }
+  useEffect(() => {
+    // Redirect if user is already logged in
+    if (!authLoading && user) {
+      router.push('/dashboard');
+    }
+  }, [authLoading, user, router]);
 
   async function onSubmit(values: CombinedSchemaType) {
     setIsSubmitting(true);
     const { password, role, ...userData } = values;
 
-    // Ensure userData matches the expected structure for signUp
     const userDetailsForSignUp = {
         name: userData.name,
         email: userData.email,
@@ -95,7 +88,6 @@ export default function SignUpPage() {
 
     await signUp(userDetailsForSignUp, role as UserRole, password);
     setIsSubmitting(false);
-    // Redirection handled by AuthContext or page-level useEffects
   }
 
   const handleRoleChange = (value: string) => {
@@ -106,15 +98,22 @@ export default function SignUpPage() {
       form.setValue('organizationName', '', { shouldValidate: true });
       form.setValue('organizerBio', '', { shouldValidate: true });
     }
-    // Manually trigger validation for all fields due to schema change.
-    // This ensures that if a user switches from organizer to attendee,
-    // the organizer-specific fields are no longer validated if they had errors.
     Object.keys(form.getValues()).forEach(key => {
         form.trigger(key as keyof CombinedSchemaType);
     });
   };
 
   const currentLoading = authLoading || isSubmitting;
+
+  // Show loading spinner if redirecting
+  if (!authLoading && user) {
+     return (
+      <div className="flex flex-col items-center justify-center min-h-[calc(100vh-10rem)]">
+        <Loader2 className="h-12 w-12 animate-spin text-primary mb-4" />
+        <p className="text-xl font-body text-muted-foreground">Redirecting...</p>
+      </div>
+    );
+  }
 
   return (
     <>
@@ -134,7 +133,7 @@ export default function SignUpPage() {
                 <FormLabel className="font-headline">I am an...</FormLabel>
                 <FormControl>
                   <RadioGroup
-                    onValueChange={handleRoleChange} // Updated handler
+                    onValueChange={handleRoleChange}
                     defaultValue={field.value}
                     className="grid grid-cols-1 md:grid-cols-3 gap-4"
                     aria-disabled={currentLoading}
