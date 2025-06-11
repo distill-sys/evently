@@ -17,7 +17,8 @@ export default function EventCard({ event }: EventCardProps) {
     day: 'numeric',
   });
 
-  const organizerDisplayName = event.users?.organization_name || event.users?.name || 'Unknown Organizer';
+  // Use the 'organizer' property which now holds the joined data
+  const organizerDisplayName = event.organizer?.organization_name || event.organizer?.name || 'Unknown Organizer';
 
   return (
     <Card className="overflow-hidden shadow-lg hover:shadow-xl transition-shadow duration-300 flex flex-col">
@@ -52,7 +53,7 @@ export default function EventCard({ event }: EventCardProps) {
             <Ticket className="h-4 w-4 mr-2 text-primary" />
             <span>Category: {event.category}</span>
           </div>
-           {event.users && ( // Check if organizer info is available
+           {event.organizer && ( // Check if organizer info is available (now using event.organizer)
              <div className="flex items-center text-xs pt-1">
               <Users className="h-4 w-4 mr-2 text-primary" />
               <span>

@@ -9,7 +9,6 @@ import { CalendarDays, MapPin, Search } from 'lucide-react';
 async function getFeaturedEvents(): Promise<Event[]> {
   // Fetch a few events, e.g., order by creation date or a specific 'featured' flag if you add one.
   // Joining with users table to get organizer name.
-  // The 'users' table is aliased to 'users' in the select if not specified otherwise with a custom alias.
   const { data, error } = await supabase
     .from('events')
     .select(`
@@ -23,7 +22,7 @@ async function getFeaturedEvents(): Promise<Event[]> {
       ticket_price_range,
       image_url,
       organizer_id,
-      users (
+      organizer:users (
         name,
         organization_name
       )
@@ -32,10 +31,21 @@ async function getFeaturedEvents(): Promise<Event[]> {
     .order('created_at', { ascending: false }); // Example: newest events first
 
   if (error) {
-    console.error('Error fetching featured events:', error);
+    console.error(
+        'Error fetching featured events. Message:', error.message, 
+        'Details:', error.details, 
+        'Hint:', error.hint, 
+        'Code:', error.code
+    );
+    // Log the full error object too for inspection if the above are undefined/empty
+    if (Object.keys(error).length === 0) {
+        console.error('Full error object was empty. This often indicates RLS or a malformed query that Supabase handled silently.');
+    } else {
+        console.error('Full error object:', JSON.stringify(error, null, 2));
+    }
     return [];
   }
-  // Supabase returns the joined table as a property with the table name, e.g., event.users
+  // Supabase returns the joined table as a property with the table name (or alias)
   return data as Event[] || [];
 }
 

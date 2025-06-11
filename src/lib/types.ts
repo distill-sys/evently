@@ -41,9 +41,8 @@ export interface Event {
   created_at?: string;
   updated_at?: string;
   // For joined data from the 'users' table (organizer's details)
-  // Supabase returns this as a nested object if singular, or array if multiple.
-  // Naming the property 'users' to match Supabase's default join key name.
-  users?: {
+  // Property name 'organizer' now matches the alias in the Supabase query.
+  organizer?: {
     name: string;
     organization_name: string | null;
     // include other organizer fields if needed directly in EventCard
