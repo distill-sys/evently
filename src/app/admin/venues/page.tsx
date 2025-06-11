@@ -46,7 +46,6 @@ export default function AdminVenuesPage() {
             'Hint:', error.hint, 
             'Code:', error.code
           );
-          // Log the full error object too for inspection if the above are undefined/empty
           if (Object.keys(error).length === 0 || (!error.message && !error.details && !error.hint && !error.code)) {
             console.error('Full error object was empty or lacked specific details. Query was: supabase.from(\'venues\').select(`*, creator:users (name)`).order(\'created_at\', { ascending: false })');
           } else {
@@ -156,7 +155,7 @@ export default function AdminVenuesPage() {
                       {venue.created_at ? format(new Date(venue.created_at), 'PPP') : 'N/A'}
                     </TableCell>
                     <TableCell className="text-right space-x-2">
-                      <Button variant="ghost" size="sm" asChild disabled>
+                      <Button variant="ghost" size="sm" asChild>
                         <Link href={`/admin/venues/${venue.venue_id}/edit`}>
                            <Edit className="mr-1 h-4 w-4" /> Edit
                         </Link>
