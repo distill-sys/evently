@@ -1,5 +1,5 @@
 
--- Create user_role type if it doesn't exist
+-- Create user_role enum type if it doesn't exist
 DO $$
 BEGIN
     IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'user_role') THEN
@@ -7,101 +7,18 @@ BEGIN
     END IF;
 END$$;
 
--- Create users table to store public user data
+-- Create users table
 CREATE TABLE IF NOT EXISTS public.users (
     auth_user_id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
-    email TEXT UNIQUE,
-    name TEXT,
-    role public.user_role DEFAULT 'attendee',
+    email TEXT UNIQUE NOT NULL,
+    name TEXT NOT NULL,
+    role public.user_role NOT NULL DEFAULT 'attendee',
     organization_name TEXT,
     bio TEXT,
     profile_picture_url TEXT,
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
-
--- Function to update updated_at column
-CREATE OR REPLACE FUNCTION public.handle_user_updated_at()
-RETURNS TRIGGER AS $$
-BEGIN
-  NEW.updated_at = NOW();
-  RETURN NEW;
-END;
-$$ LANGUAGE plpgsql;
-
--- Trigger to update updated_at on user update
-DO $$
-BEGIN
-    IF NOT EXISTS (
-        SELECT 1
-        FROM pg_trigger
-        WHERE tgname = 'on_user_updated' AND tgrelid = 'public.users'::regclass
-    ) THEN
-        CREATE TRIGGER on_user_updated
-          BEFORE UPDATE ON public.users
-          FOR EACH ROW
-          EXECUTE FUNCTION public.handle_user_updated_at();
-    END IF;
-END$$;
-
--- Enable RLS for users table
-ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;
-
--- Helper function to check if the current user is an admin
-CREATE OR REPLACE FUNCTION public.is_admin()
-RETURNS boolean AS $$
-DECLARE
-  user_role_value public.user_role;
-BEGIN
-  -- This SELECT statement runs with the privileges of the function definer,
-  -- bypassing the RLS of the calling user for this specific query.
-  SELECT role INTO user_role_value FROM public.users WHERE auth_user_id = auth.uid();
-  RETURN user_role_value = 'admin';
-EXCEPTION
-  WHEN NO_DATA_FOUND THEN
-    RETURN FALSE; -- User not found or no role, not an admin
-  WHEN TOO_MANY_ROWS THEN
-    RETURN FALSE; -- Should not happen if auth_user_id is unique
-END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
-
--- Grant execute permission on the function to authenticated users
-GRANT EXECUTE ON FUNCTION public.is_admin() TO authenticated;
-GRANT EXECUTE ON FUNCTION public.is_admin() TO service_role; -- Grant to service_role as well for backend/trigger usage if needed
-
-
--- Policies for users table
--- Users can read their own profile
-DROP POLICY IF EXISTS "Allow users to read their own profile" ON public.users;
-CREATE POLICY "Allow users to read their own profile"
-ON public.users
-FOR SELECT
-TO authenticated
-USING (auth.uid() = auth_user_id);
-
--- Users can update their own profile
-DROP POLICY IF EXISTS "Allow users to update their own profile" ON public.users;
-CREATE POLICY "Allow users to update their own profile"
-ON public.users
-FOR UPDATE
-TO authenticated
-USING (auth.uid() = auth_user_id)
-WITH CHECK (auth.uid() = auth_user_id);
-
--- Admins can manage all user profiles (SELECT, INSERT, UPDATE, DELETE)
-DROP POLICY IF EXISTS "Allow admins to manage all user profiles" ON public.users;
-DROP POLICY IF EXISTS "Admins can manage all user profiles" ON public.users; -- Drop by new name too, just in case
-CREATE POLICY "Admins can manage all user profiles"
-ON public.users
-FOR ALL -- Covers SELECT, INSERT, UPDATE, DELETE
-TO authenticated
-USING (
-  public.is_admin() -- True if the current session's user is an admin
-)
-WITH CHECK (
-  public.is_admin() -- Ensure consistency for write operations by admins
-);
-
 
 -- Create venues table
 CREATE TABLE IF NOT EXISTS public.venues (
@@ -117,12 +34,89 @@ CREATE TABLE IF NOT EXISTS public.venues (
     contact_email TEXT,
     contact_phone TEXT,
     image_url TEXT,
-    created_by UUID REFERENCES public.users(auth_user_id), -- Can be null if admin system not tied to a user, or points to an admin user
+    created_by UUID REFERENCES public.users(auth_user_id) ON DELETE SET NULL, -- Admin user who created it
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Function to update updated_at column for venues
+-- Create events table
+CREATE TABLE IF NOT EXISTS public.events (
+    event_id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    title TEXT NOT NULL,
+    description TEXT NOT NULL,
+    date DATE NOT NULL, -- Changed to DATE type for YYYY-MM-DD
+    time TEXT NOT NULL, -- e.g., "10:00 AM - 5:00 PM"
+    location TEXT NOT NULL,
+    category TEXT NOT NULL,
+    ticket_price_range TEXT, -- e.g., "$20 - $50" or "Free"
+    image_url TEXT,
+    organizer_id UUID REFERENCES public.users(auth_user_id) ON DELETE CASCADE, -- Foreign Key to users table
+    venue_id UUID REFERENCES public.venues(venue_id) ON DELETE SET NULL, -- Optional link to a venue
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+
+-- =============================================
+-- FUNCTIONS for RLS and Triggers
+-- =============================================
+
+-- Helper function to check if the current user is an admin
+-- Ensure this function is owned by a superuser (e.g., postgres or supabase_admin)
+-- or a role that has BYPASSRLS attribute to break RLS recursion.
+DROP FUNCTION IF EXISTS public.is_admin(); -- Drop if exists to ensure clean re-creation
+CREATE OR REPLACE FUNCTION public.is_admin()
+RETURNS boolean AS $$
+DECLARE
+  v_is_admin boolean := false;
+BEGIN
+  -- Explicitly schema-qualify the table and ensure no ambiguous column references.
+  -- This query runs with the privileges of the function definer.
+  SELECT (public.users.role = 'admin')
+  INTO v_is_admin
+  FROM public.users
+  WHERE public.users.auth_user_id = auth.uid();
+
+  -- If no row is found (auth.uid() not in users table or role is null), v_is_admin will be NULL.
+  -- Coalesce NULL to FALSE.
+  RETURN COALESCE(v_is_admin, false);
+EXCEPTION
+  WHEN OTHERS THEN -- Catch any unexpected errors during the select
+    RAISE WARNING 'Error in is_admin function: %', SQLERRM;
+    RETURN FALSE;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER STABLE;
+-- STABLE: Indicates the function cannot modify the database and always
+--         produces the same results for the same argument values within a single
+--         statement. This can help the query planner.
+-- SECURITY DEFINER: The function is to be executed with the privileges
+--                   of the user that created it.
+
+-- Grant necessary permissions for is_admin
+GRANT EXECUTE ON FUNCTION public.is_admin() TO authenticated;
+GRANT EXECUTE ON FUNCTION public.is_admin() TO service_role;
+
+
+-- Function to update updated_at column for users table
+DROP FUNCTION IF EXISTS public.handle_user_updated_at();
+CREATE OR REPLACE FUNCTION public.handle_user_updated_at()
+RETURNS TRIGGER AS $$
+BEGIN
+  NEW.updated_at = NOW();
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Trigger to update updated_at on user update
+DROP TRIGGER IF EXISTS on_user_updated ON public.users;
+CREATE TRIGGER on_user_updated
+  BEFORE UPDATE ON public.users
+  FOR EACH ROW
+  EXECUTE FUNCTION public.handle_user_updated_at();
+
+
+-- Function to update updated_at column for venues table
+DROP FUNCTION IF EXISTS public.handle_venue_updated_at();
 CREATE OR REPLACE FUNCTION public.handle_venue_updated_at()
 RETURNS TRIGGER AS $$
 BEGIN
@@ -132,64 +126,15 @@ END;
 $$ LANGUAGE plpgsql;
 
 -- Trigger to update updated_at on venue update
-DO $$
-BEGIN
-    IF NOT EXISTS (
-        SELECT 1
-        FROM pg_trigger
-        WHERE tgname = 'on_venue_updated' AND tgrelid = 'public.venues'::regclass
-    ) THEN
-        CREATE TRIGGER on_venue_updated
-          BEFORE UPDATE ON public.venues
-          FOR EACH ROW
-          EXECUTE FUNCTION public.handle_venue_updated_at();
-    END IF;
-END$$;
-
--- Enable RLS for venues table
-ALTER TABLE public.venues ENABLE ROW LEVEL SECURITY;
-
--- Policies for venues table
--- Admins can do anything on venues
-DROP POLICY IF EXISTS "Allow admins full access on venues" ON public.venues;
-CREATE POLICY "Allow admins full access on venues"
-ON public.venues
-FOR ALL
-TO authenticated
-USING (
-  public.is_admin() -- Use the same helper function
-)
-WITH CHECK (
-  public.is_admin()
-);
-
--- Authenticated users can view venues (e.g., for organizers to see them when creating events, attendees to see event details)
-DROP POLICY IF EXISTS "Allow authenticated users to read venues" ON public.venues;
-CREATE POLICY "Allow authenticated users to read venues"
-ON public.venues
-FOR SELECT
-TO authenticated
-USING (true);
+DROP TRIGGER IF EXISTS on_venue_updated ON public.venues;
+CREATE TRIGGER on_venue_updated
+  BEFORE UPDATE ON public.venues
+  FOR EACH ROW
+  EXECUTE FUNCTION public.handle_venue_updated_at();
 
 
--- Create events table
-CREATE TABLE IF NOT EXISTS public.events (
-    event_id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-    title TEXT NOT NULL,
-    description TEXT NOT NULL,
-    date DATE NOT NULL, -- Store as DATE for easier date-based filtering
-    time TEXT NOT NULL, -- e.g., "10:00 AM - 5:00 PM"
-    location TEXT NOT NULL,
-    category TEXT NOT NULL,
-    ticket_price_range TEXT, -- e.g., "$20 - $50" or "Free"
-    image_url TEXT,
-    organizer_id UUID REFERENCES public.users(auth_user_id) ON DELETE SET NULL, -- Event remains if organizer is deleted
-    venue_id UUID REFERENCES public.venues(venue_id) ON DELETE SET NULL, -- Event can remain if venue is deleted
-    created_at TIMESTAMPTZ DEFAULT NOW(),
-    updated_at TIMESTAMPTZ DEFAULT NOW()
-);
-
--- Function to update updated_at column for events
+-- Function to update updated_at column for events table
+DROP FUNCTION IF EXISTS public.handle_event_updated_at();
 CREATE OR REPLACE FUNCTION public.handle_event_updated_at()
 RETURNS TRIGGER AS $$
 BEGIN
@@ -199,109 +144,138 @@ END;
 $$ LANGUAGE plpgsql;
 
 -- Trigger to update updated_at on event update
-DO $$
+DROP TRIGGER IF EXISTS on_event_updated ON public.events;
+CREATE TRIGGER on_event_updated
+  BEFORE UPDATE ON public.events
+  FOR EACH ROW
+  EXECUTE FUNCTION public.handle_event_updated_at();
+
+-- Function to get user role distribution for analytics
+DROP FUNCTION IF EXISTS public.get_user_role_distribution();
+CREATE OR REPLACE FUNCTION public.get_user_role_distribution()
+RETURNS TABLE(role public.user_role, user_count bigint) AS $$
 BEGIN
-    IF NOT EXISTS (
-        SELECT 1
-        FROM pg_trigger
-        WHERE tgname = 'on_event_updated' AND tgrelid = 'public.events'::regclass
-    ) THEN
-        CREATE TRIGGER on_event_updated
-          BEFORE UPDATE ON public.events
-          FOR EACH ROW
-          EXECUTE FUNCTION public.handle_event_updated_at();
-    END IF;
-END$$;
+  RETURN QUERY
+    SELECT u.role, count(u.auth_user_id)
+    FROM public.users u
+    GROUP BY u.role;
+END;
+$$ LANGUAGE plpgsql STABLE SECURITY DEFINER;
+
+-- Grant execute permission on the function
+GRANT EXECUTE ON FUNCTION public.get_user_role_distribution() TO authenticated; -- Or specific admin role if created
+GRANT EXECUTE ON FUNCTION public.get_user_role_distribution() TO service_role;
 
 
--- Enable RLS for events table
+-- =============================================
+-- RLS POLICIES
+-- =============================================
+
+-- Enable RLS for all tables
+ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.venues ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.events ENABLE ROW LEVEL SECURITY;
 
--- Policies for events table
--- Organizers can create events
-DROP POLICY IF EXISTS "Allow organizers to create events" ON public.events;
-CREATE POLICY "Allow organizers to create events"
-ON public.events
-FOR INSERT
+-- --- Users Table RLS ---
+-- Policy: Users can view their own profile
+DROP POLICY IF EXISTS "Users can view their own profile" ON public.users;
+CREATE POLICY "Users can view their own profile"
+ON public.users
+FOR SELECT
 TO authenticated
-WITH CHECK (
-  (SELECT role FROM public.users WHERE auth_user_id = auth.uid()) = 'organizer' AND
-  organizer_id = auth.uid() -- Ensure they can only create events for themselves
-);
+USING (auth_user_id = auth.uid());
 
--- Organizers can view, update, and delete their own events
+-- Policy: Users can update their own profile
+DROP POLICY IF EXISTS "Users can update their own profile" ON public.users;
+CREATE POLICY "Users can update their own profile"
+ON public.users
+FOR UPDATE
+TO authenticated
+USING (auth_user_id = auth.uid())
+WITH CHECK (auth_user_id = auth.uid());
+
+-- Policy: Admins can manage (view, insert, update, delete) all user profiles
+DROP POLICY IF EXISTS "Admins can manage all user profiles" ON public.users;
+DROP POLICY IF EXISTS "Allow admins to manage all user profiles" ON public.users; -- old name
+CREATE POLICY "Admins can manage all user profiles"
+ON public.users
+FOR ALL
+TO authenticated
+USING (public.is_admin())
+WITH CHECK (public.is_admin());
+
+
+-- --- Venues Table RLS ---
+-- Policy: Admins can do anything on venues
+DROP POLICY IF EXISTS "Allow admins full access on venues" ON public.venues;
+CREATE POLICY "Allow admins full access on venues"
+ON public.venues
+FOR ALL
+TO authenticated
+USING (public.is_admin())
+WITH CHECK (public.is_admin());
+
+-- Policy: Authenticated users can view venues
+DROP POLICY IF EXISTS "Allow authenticated users to read venues" ON public.venues;
+CREATE POLICY "Allow authenticated users to read venues"
+ON public.venues
+FOR SELECT
+TO authenticated
+USING (true); -- Or more restrictive if needed, e.g., only organizers
+
+
+-- --- Events Table RLS ---
+-- Policy: Public can view events (assuming events are generally public)
+DROP POLICY IF EXISTS "Allow public read access on events" ON public.events;
+CREATE POLICY "Allow public read access on events"
+ON public.events
+FOR SELECT
+TO anon, authenticated -- Allows both anonymous and authenticated users
+USING (true);
+
+-- Policy: Organizers can manage their own events
 DROP POLICY IF EXISTS "Allow organizers to manage their own events" ON public.events;
 CREATE POLICY "Allow organizers to manage their own events"
 ON public.events
-FOR ALL -- Covers SELECT, UPDATE, DELETE
+FOR ALL -- Covers INSERT, SELECT, UPDATE, DELETE
 TO authenticated
 USING (
   (SELECT role FROM public.users WHERE auth_user_id = auth.uid()) = 'organizer' AND
-  organizer_id = auth.uid()
+  organizer_id = auth.uid() -- For existing events
 )
-WITH CHECK ( -- For UPDATE
+WITH CHECK (
   (SELECT role FROM public.users WHERE auth_user_id = auth.uid()) = 'organizer' AND
-  organizer_id = auth.uid()
+  organizer_id = auth.uid() -- For new/updated events
 );
 
--- Admins can manage all events
+-- Policy: Admins can do anything on events
 DROP POLICY IF EXISTS "Allow admins full access on events" ON public.events;
 CREATE POLICY "Allow admins full access on events"
 ON public.events
 FOR ALL
 TO authenticated
-USING (
-  public.is_admin() -- Use the same helper function
-)
-WITH CHECK (
-  public.is_admin()
-);
-
--- All authenticated users (including attendees) can view all events
-DROP POLICY IF EXISTS "Allow authenticated users to read events" ON public.events;
-CREATE POLICY "Allow authenticated users to read events"
-ON public.events
-FOR SELECT
-TO authenticated
-USING (true);
+USING (public.is_admin())
+WITH CHECK (public.is_admin());
 
 
--- RPC function for user role distribution
-CREATE OR REPLACE FUNCTION public.get_user_role_distribution()
-RETURNS TABLE (role public.user_role, user_count BIGINT) AS $$
-BEGIN
-  RETURN QUERY
-  SELECT u.role, COUNT(u.auth_user_id) as user_count
-  FROM public.users u
-  GROUP BY u.role;
-END;
-$$ LANGUAGE plpgsql;
-
--- Grant execute permission on the RPC function
-GRANT EXECUTE ON FUNCTION public.get_user_role_distribution() TO authenticated;
-GRANT EXECUTE ON FUNCTION public.get_user_role_distribution() TO service_role;
-
--- Ensure the `user_role` enum includes 'unknown' or handle NULL roles if they can occur
--- If roles can be NULL, the get_user_role_distribution function might need adjustment
--- For now, assuming 'role' in users table is NOT NULL and always one of the defined enum values.
-
--- Mock data insertion (Optional, for testing)
--- You might want to run this separately after tables and RLS are set up.
--- Ensure you have auth users created in Supabase Auth that match these UUIDs if you use them.
--- Comment out if not needed or if you handle mock data via application logic.
-
+-- Seed Data (Optional - uncomment to add some initial data if needed)
 /*
--- Example: Inserting a user manually (ensure this auth_user_id exists in auth.users)
--- You'd typically sign up a user through the app/Supabase Auth to get an ID.
+-- Example: Add a default admin user (replace with your actual admin user's auth_user_id and email after they sign up)
+-- This needs to be run AFTER the user exists in auth.users
 -- INSERT INTO public.users (auth_user_id, email, name, role)
--- VALUES ('your-auth-user-id-here', 'admin@example.com', 'Admin User', 'admin')
+-- VALUES ('your-admin-auth-uuid', 'admin@example.com', 'Admin User', 'admin')
 -- ON CONFLICT (auth_user_id) DO NOTHING;
 
--- INSERT INTO public.users (auth_user_id, email, name, role)
--- VALUES ('another-auth-user-id', 'organizer@example.com', 'Event Organizer Pro', 'organizer')
+-- Example: Add a default organizer user
+-- INSERT INTO public.users (auth_user_id, email, name, role, organization_name, bio)
+-- VALUES ('your-organizer-auth-uuid', 'organizer@example.com', 'Event Organizer Pro', 'organizer', 'Pro Events LLC', 'We host the best events.')
 -- ON CONFLICT (auth_user_id) DO NOTHING;
 
--- INSERT INTO public.users (auth_user_id, email, name, role)
--- VALUES ('yet-another-auth-user-id', 'attendee@example.com', 'Regular Attendee', 'attendee')
--- ON CONFLICT (auth_user_id) DO NOTHING;
+-- Example: Add a default venue (assuming an admin or specific user created it)
+-- INSERT INTO public.venues (name, address, city, country, capacity, created_by)
+-- VALUES ('The Grand Hall', '123 Main St', 'Metropolis', 'USA', 500, 'your-admin-auth-uuid');
+
+-- Example: Add a default event (assuming an organizer created it)
+-- INSERT INTO public.events (title, description, date, time, location, category, organizer_id)
+-- VALUES ('Annual Tech Conference', 'Join us for the latest in tech.', '2024-12-01', '9:00 AM - 5:00 PM', 'Metropolis', 'Technology', 'your-organizer-auth-uuid');
 */
