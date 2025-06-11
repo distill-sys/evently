@@ -22,25 +22,33 @@ import * as z from 'zod';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { format } from 'date-fns';
 
+const NO_VENUE_SENTINEL_VALUE = "--no-venue--";
+
 const eventSchema = z.object({
   title: z.string().min(3, { message: "Title must be at least 3 characters." }),
   description: z.string().min(10, { message: "Description must be at least 10 characters." }),
   date: z.date({ required_error: "Event date is required." }),
   time: z.string().regex(/^([0-1]?[0-9]|2[0-3]):[0-5][0-9](\s(AM|PM))?$/, { message: "Invalid time format (e.g., 10:00 AM or 14:30)." }),
-  location: z.string().min(3, { message: "Location is required if no venue is selected." }),
+  location: z.string().optional(), // Made location optional here
   venue_id: z.string().uuid({ message: "Invalid venue ID." }).optional().nullable(),
   category: z.string().min(2, { message: "Category is required." }),
   ticketPriceRange: z.string().min(1, { message: "Ticket price/range is required (e.g., Free, $20, $15-$40)." }),
   imageUrl: z.string().url({ message: "Invalid image URL." }).optional().or(z.literal('')),
-}).refine(data => data.venue_id || data.location, {
-    message: "Either a venue must be selected or a location manually entered.",
-    path: ["location"], 
+}).refine(data => {
+    // If a venue_id is present, location is not strictly required by this refine.
+    if (data.venue_id) {
+      return true;
+    }
+    // If no venue_id, then location must be present and at least 3 characters long.
+    return !!data.location && data.location.trim().length >= 3;
+  }, {
+    message: "Event location details (min 3 chars) are required if no venue is selected.",
+    path: ["location"], // Apply error to the location field
 });
 
 
 type EventFormData = z.infer<typeof eventSchema>;
 
-const NO_VENUE_SENTINEL_VALUE = "--no-venue--"; // Sentinel value for 'No venue' option
 
 export default function CreateEventPage() {
   const { user: authUser, role: authRole, isLoading: authLoading } = useAuth();
@@ -106,7 +114,7 @@ export default function CreateEventPage() {
       description: data.description,
       date: format(data.date, 'yyyy-MM-dd'),
       time: data.time,
-      location: data.location, 
+      location: data.location || (data.venue_id ? '' : 'Online'), // Default to empty or 'Online' if venue selected but no specific location detail
       venue_id: data.venue_id || null,
       category: data.category,
       ticket_price_range: data.ticketPriceRange,
@@ -250,13 +258,13 @@ export default function CreateEventPage() {
                     <FormLabel className="font-headline">Venue (Optional)</FormLabel>
                     <Select
                         onValueChange={(value) => field.onChange(value === NO_VENUE_SENTINEL_VALUE ? null : value)}
-                        value={field.value || ""} // If field.value is null, Select shows placeholder
+                        value={field.value || NO_VENUE_SENTINEL_VALUE} // Ensure sentinel or actual value
                         disabled={isLoadingVenues}
                     >
                       <FormControl>
                         <SelectTrigger className="font-body">
                           {isLoadingVenues && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                          <SelectValue placeholder={isLoadingVenues ? "Loading venues..." : "Select a venue"} />
+                          <SelectValue placeholder={isLoadingVenues ? "Loading venues..." : "Select a venue or choose 'No specific venue'"} />
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
