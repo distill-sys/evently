@@ -49,13 +49,26 @@ export default function AdminAnalyticsPage() {
             supabase.from('users').select('*', { count: 'exact', head: true }),
             supabase.from('events').select('*', { count: 'exact', head: true }),
             supabase.from('venues').select('*', { count: 'exact', head: true }),
-            supabase.from('users').select('role, count()').group('role') // Use count()
+            supabase.from('users').select('role, count').group('role') // Standard Supabase syntax for grouped count
           ]);
 
           if (usersCountRes.error) throw usersCountRes.error;
           if (eventsCountRes.error) throw eventsCountRes.error;
           if (venuesCountRes.error) throw venuesCountRes.error;
-          if (userRolesRes.error) throw userRolesRes.error;
+          if (userRolesRes.error) {
+            console.error(
+              'Error fetching user roles. Message:', userRolesRes.error.message, 
+              'Details:', userRolesRes.error.details, 
+              'Hint:', userRolesRes.error.hint, 
+              'Code:', userRolesRes.error.code
+            );
+            if (Object.keys(userRolesRes.error).length === 0 || (!userRolesRes.error.message && !userRolesRes.error.details && !userRolesRes.error.hint && !userRolesRes.error.code)) {
+                console.error('Full userRolesRes.error object was empty or lacked specific details.');
+            } else {
+                console.error('Full userRolesRes.error object:', JSON.stringify(userRolesRes.error, null, 2));
+            }
+            throw userRolesRes.error;
+          }
           
           setStats({
             users: usersCountRes.count || 0,
@@ -65,7 +78,7 @@ export default function AdminAnalyticsPage() {
           
           const formattedRolesData = (userRolesRes.data || []).map(item => ({
             role: item.role || 'Unknown',
-            count: item.count || 0, // Supabase should return a 'count' field from count()
+            count: item.count || 0, 
           }));
           setUserRoleData(formattedRolesData as UserRoleDistribution[]);
 
@@ -224,3 +237,4 @@ export default function AdminAnalyticsPage() {
     </div>
   );
 }
+
