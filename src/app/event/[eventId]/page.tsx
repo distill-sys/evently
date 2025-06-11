@@ -1,37 +1,58 @@
-import { mockEvents, mockOrganizers } from '@/lib/mockData';
-import type { Event as EventType, Organizer as OrganizerType } from '@/lib/types';
+
+import type { Event as EventType, Organizer as OrganizerType, Venue, UserProfile } from '@/lib/types';
 import Image from 'next/image';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { CalendarDays, MapPin, Ticket, Users, DollarSign, ArrowLeft } from 'lucide-react';
+import { CalendarDays, MapPin, Ticket, Users, DollarSign, ArrowLeft, Building } from 'lucide-react';
+import { supabase } from '@/lib/supabaseClient';
+import { notFound } from 'next/navigation';
 
 interface EventPageProps {
   params: { eventId: string };
 }
 
-// This is a server component
+async function getEventDetails(eventId: string): Promise<EventType | null> {
+  const { data, error } = await supabase
+    .from('events')
+    .select(`
+      *,
+      organizer:users (
+        auth_user_id,
+        name,
+        email,
+        organization_name,
+        bio,
+        profile_picture_url
+      ),
+      venue:venues (
+        name,
+        address,
+        city,
+        state_province,
+        country
+      )
+    `)
+    .eq('event_id', eventId)
+    .single();
+
+  if (error) {
+    console.error('Error fetching event details:', error);
+    return null;
+  }
+  // The 'organizer' and 'venue' fields from the query will be nested objects.
+  // We need to map them correctly to what EventType expects if direct fields were used.
+  // However, EventType is already set up to handle nested organizer and venue objects.
+  return data as EventType | null;
+}
+
+
 export default async function EventPage({ params }: EventPageProps) {
   const eventId = params.eventId;
-  // In a real app, you'd fetch this data from a database or API
-  const event: EventType | undefined = mockEvents.find(e => e.id === eventId);
-  const organizer: OrganizerType | undefined = event ? mockOrganizers.find(org => org.id === event.organizerId) : undefined;
+  const event = await getEventDetails(eventId);
 
   if (!event) {
-    return (
-      <div className="text-center py-16">
-        <Ticket className="h-16 w-16 text-muted-foreground mx-auto mb-4" />
-        <h1 className="text-3xl font-headline font-semibold">Event Not Found</h1>
-        <p className="font-body text-muted-foreground mt-2">
-          Sorry, we couldn&apos;t find the event you&apos;re looking for.
-        </p>
-        <Button asChild variant="link" className="mt-4 font-body">
-          <Link href="/attendee">
-            <ArrowLeft className="mr-2 h-4 w-4" /> Back to Events
-          </Link>
-        </Button>
-      </div>
-    );
+    notFound(); // This will render the nearest not-found.tsx or Next.js default 404 page
   }
 
   const eventDate = new Date(event.date).toLocaleDateString('en-US', {
@@ -39,6 +60,15 @@ export default async function EventPage({ params }: EventPageProps) {
     month: 'long',
     day: 'numeric',
   });
+
+  // Adapt UserProfile from event.organizer to OrganizerType for display if needed, or use directly
+  const displayOrganizer: OrganizerType | undefined = event.organizer ? {
+    ...(event.organizer as UserProfile), // Cast to UserProfile which is the base
+    id: (event.organizer as UserProfile).auth_user_id, // Map auth_user_id to id
+    profilePictureUrl: (event.organizer as UserProfile).profile_picture_url || 'https://placehold.co/120x120.png',
+    eventsHeld: 0, // This would require another query or be part of a more complex type
+  } : undefined;
+
 
   return (
     <div className="max-w-4xl mx-auto py-8 space-y-8">
@@ -50,7 +80,7 @@ export default async function EventPage({ params }: EventPageProps) {
 
       <Card className="overflow-hidden shadow-xl">
         <Image
-          src={event.imageUrl}
+          src={event.image_url || 'https://placehold.co/600x400.png'}
           alt={event.title}
           width={1200}
           height={500}
@@ -66,7 +96,7 @@ export default async function EventPage({ params }: EventPageProps) {
             </div>
             <div className="flex items-center">
               <MapPin className="h-5 w-5 mr-2 text-accent" />
-              <span>{event.location}</span>
+              <span>{event.venue ? `${event.venue.name}, ${event.venue.city}` : event.location}</span>
             </div>
             <div className="flex items-center">
               <Ticket className="h-5 w-5 mr-2 text-accent" />
@@ -89,11 +119,12 @@ export default async function EventPage({ params }: EventPageProps) {
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <p className="font-body text-lg">{event.ticketPriceRange}</p>
+                <p className="font-body text-lg">{event.ticket_price_range}</p>
                 <Button className="w-full mt-4 font-body" size="lg">Get Tickets (Mock)</Button>
               </CardContent>
             </Card>
-            {organizer && (
+            
+            {displayOrganizer && (
               <Card className="bg-secondary/30">
                 <CardHeader>
                   <CardTitle className="font-headline text-xl flex items-center">
@@ -102,11 +133,24 @@ export default async function EventPage({ params }: EventPageProps) {
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <Link href={`/organizer/${organizer.id}`} className="block group">
+                  <Link href={`/organizer/${displayOrganizer.id}`} className="block group">
                     <div className="flex items-center gap-3">
-                        <Image src={organizer.profilePictureUrl} alt={organizer.name} width={48} height={48} className="rounded-full" data-ai-hint="person avatar" />
+                        <Image 
+                            src={displayOrganizer.profilePictureUrl || 'https://placehold.co/48x48.png'} 
+                            alt={displayOrganizer.name} 
+                            width={48} height={48} 
+                            className="rounded-full" 
+                            data-ai-hint="person avatar" 
+                        />
                         <div>
-                            <p className="font-body text-lg font-semibold group-hover:text-primary transition-colors">{organizer.name}</p>
+                            <p className="font-body text-lg font-semibold group-hover:text-primary transition-colors">
+                                {displayOrganizer.name}
+                            </p>
+                            {(displayOrganizer as UserProfile).organization_name && (
+                                <p className="font-body text-xs text-muted-foreground">
+                                    {(displayOrganizer as UserProfile).organization_name}
+                                </p>
+                            )}
                             <p className="font-body text-sm text-muted-foreground group-hover:text-primary transition-colors">View Profile &rarr;</p>
                         </div>
                     </div>
@@ -115,15 +159,24 @@ export default async function EventPage({ params }: EventPageProps) {
               </Card>
             )}
           </div>
+
+          {event.venue && (
+            <Card className="bg-secondary/30">
+                <CardHeader>
+                    <CardTitle className="font-headline text-xl flex items-center">
+                        <Building className="h-5 w-5 mr-2 text-primary" />
+                        Venue Details
+                    </CardTitle>
+                </CardHeader>
+                <CardContent className="font-body space-y-1">
+                    <p className="font-semibold">{event.venue.name}</p>
+                    <p>{event.venue.address}</p>
+                    <p>{event.venue.city}{event.venue.state_province ? `, ${event.venue.state_province}` : ''}, {event.venue.country}</p>
+                </CardContent>
+            </Card>
+          )}
         </CardContent>
       </Card>
     </div>
   );
 }
-
-// Generate static paths for mock events if needed for SSG, though for this dynamic route it's usually SSR/ISR.
-// export async function generateStaticParams() {
-//   return mockEvents.map((event) => ({
-//     eventId: event.id,
-//   }));
-// }
