@@ -210,7 +210,16 @@ export default function AdminAddVenuePage() {
                   render={({ field }) => (
                     <FormItem className="md:w-1/2">
                       <FormLabel className="font-headline">Capacity</FormLabel>
-                      <FormControl><Input type="number" placeholder="500" {...field} onChange={e => field.onChange(e.target.value === '' ? null : Number(e.target.value))} className="font-body" /></FormControl>
+                      <FormControl>
+                        <Input
+                          type="number"
+                          placeholder="500"
+                          {...field}
+                          value={field.value === null || field.value === undefined ? '' : field.value}
+                          onChange={e => field.onChange(e.target.value === '' ? null : Number(e.target.value))}
+                          className="font-body"
+                        />
+                      </FormControl>
                       <FormMessage />
                     </FormItem>
                   )}
