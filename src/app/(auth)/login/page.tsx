@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState } from 'react';
@@ -16,18 +17,19 @@ import {
 } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { useAuth } from '@/contexts/AuthContext';
-import { useToast } from '@/hooks/use-toast';
-import { Eye, EyeOff } from 'lucide-react';
+import { Eye, EyeOff, Loader2 } from 'lucide-react';
+import { useRouter } from 'next/navigation'; // Import useRouter
 
 const loginSchema = z.object({
   email: z.string().email({ message: 'Invalid email address.' }),
-  password: z.string().min(1, { message: 'Password is required.' }), // Min 1 for login, real app would have more checks
+  password: z.string().min(1, { message: 'Password is required.' }),
 });
 
 export default function LoginPage() {
-  const { login } = useAuth();
-  const { toast } = useToast();
+  const { signIn, isLoading: authLoading, user } = useAuth(); // Renamed login to signIn
   const [showPassword, setShowPassword] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const router = useRouter(); // Initialize useRouter
 
   const form = useForm<z.infer<typeof loginSchema>>({
     resolver: zodResolver(loginSchema),
@@ -37,15 +39,27 @@ export default function LoginPage() {
     },
   });
 
-  function onSubmit(values: z.infer<typeof loginSchema>) {
-    // In a real app, you'd call an API. Here, we use mock auth.
-    // The name is hardcoded for mock, could be fetched or part of login response.
-    login(values.email, 'Mock User'); 
-    toast({
-      title: "Logged In!",
-      description: "Welcome back to Evently!",
-    });
+  // Redirect if user is already logged in
+  if (!authLoading && user) {
+    router.push('/dashboard'); // Or any other appropriate page
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[calc(100vh-10rem)]">
+        <Loader2 className="h-12 w-12 animate-spin text-primary mb-4" />
+        <p className="text-xl font-body text-muted-foreground">Redirecting...</p>
+      </div>
+    );
   }
+
+
+  async function onSubmit(values: z.infer<typeof loginSchema>) {
+    setIsSubmitting(true);
+    await signIn(values.email, values.password);
+    setIsSubmitting(false);
+    // Redirection is handled by AuthContext's onAuthStateChange or page-level useEffects now
+    // No explicit router.push here unless signIn returns specific routing instructions
+  }
+
+  const currentLoading = authLoading || isSubmitting;
 
   return (
     <>
@@ -64,7 +78,7 @@ export default function LoginPage() {
               <FormItem>
                 <FormLabel className="font-headline">Email Address</FormLabel>
                 <FormControl>
-                  <Input type="email" placeholder="you@example.com" {...field} className="font-body" />
+                  <Input type="email" placeholder="you@example.com" {...field} className="font-body" disabled={currentLoading} />
                 </FormControl>
                 <FormMessage />
               </FormItem>
@@ -78,13 +92,14 @@ export default function LoginPage() {
                 <FormLabel className="font-headline">Password</FormLabel>
                 <FormControl>
                   <div className="relative">
-                    <Input type={showPassword ? "text" : "password"} placeholder="••••••••" {...field} className="font-body pr-10" />
+                    <Input type={showPassword ? "text" : "password"} placeholder="••••••••" {...field} className="font-body pr-10" disabled={currentLoading} />
                      <Button
                       type="button"
                       variant="ghost"
                       size="icon"
                       className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7 text-muted-foreground hover:text-foreground"
                       onClick={() => setShowPassword(!showPassword)}
+                      disabled={currentLoading}
                     >
                       {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                       <span className="sr-only">{showPassword ? "Hide password" : "Show password"}</span>
@@ -102,7 +117,8 @@ export default function LoginPage() {
               </Link>
             </Button>
           </div>
-          <Button type="submit" className="w-full font-body">
+          <Button type="submit" className="w-full font-body" disabled={currentLoading}>
+            {currentLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
             Log In
           </Button>
         </form>
@@ -118,3 +134,5 @@ export default function LoginPage() {
     </>
   );
 }
+
+    

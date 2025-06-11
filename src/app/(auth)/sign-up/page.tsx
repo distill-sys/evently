@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState } from 'react';
@@ -19,8 +20,9 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Textarea } from '@/components/ui/textarea';
 import type { UserRole } from '@/lib/types';
 import { useAuth } from '@/contexts/AuthContext';
-import { Building, Shield, UserCircle2, Eye, EyeOff } from 'lucide-react';
-import { useToast } from '@/hooks/use-toast';
+import { Building, Shield, UserCircle2, Eye, EyeOff, Loader2 } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+
 
 const baseSchema = z.object({
   name: z.string().min(2, { message: 'Name must be at least 2 characters.' }),
@@ -34,49 +36,84 @@ const organizerSchema = baseSchema.extend({
   organizationName: z.string().min(2, { message: 'Organization name must be at least 2 characters.' }),
   organizerBio: z.string().min(10, { message: 'Bio must be at least 10 characters.' }).max(500, { message: 'Bio must be less than 500 characters.' }),
 });
-const adminSchema = baseSchema; // Admin might have more fields in a real app
+const adminSchema = baseSchema; 
+
+type CombinedSchemaType = z.infer<typeof attendeeSchema> | z.infer<typeof organizerSchema> | z.infer<typeof adminSchema>;
+
 
 export default function SignUpPage() {
   const [selectedRole, setSelectedRole] = useState<UserRole>('attendee');
-  const { signUp } = useAuth();
-  const { toast } = useToast();
+  const { signUp, isLoading: authLoading, user } = useAuth();
   const [showPassword, setShowPassword] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const router = useRouter();
 
   const currentSchema = selectedRole === 'organizer' ? organizerSchema : (selectedRole === 'admin' ? adminSchema : attendeeSchema);
 
-  const form = useForm<z.infer<typeof currentSchema>>({
+  const form = useForm<CombinedSchemaType>({ // Use combined type for form
     resolver: zodResolver(currentSchema),
     defaultValues: {
       name: '',
       email: '',
       password: '',
       role: 'attendee',
-      organizationName: '', // For organizer
-      organizerBio: '', // For organizer
+      organizationName: '',
+      organizerBio: '',
     },
+    context: { role: selectedRole }, // Pass role to context for conditional validation
   });
+  
+  // Re-validate when schema changes
+  React.useEffect(() => {
+    form.trigger();
+  }, [selectedRole, form]);
 
-  function onSubmit(values: z.infer<typeof currentSchema>) {
-    const { role, ...userData } = values;
-    signUp(userData, role as UserRole);
-    toast({
-      title: "Account Created!",
-      description: `Welcome, ${values.name}! You've signed up as a ${role}.`,
-    });
+
+  // Redirect if user is already logged in
+  if (!authLoading && user) {
+    router.push('/dashboard');
+     return (
+      <div className="flex flex-col items-center justify-center min-h-[calc(100vh-10rem)]">
+        <Loader2 className="h-12 w-12 animate-spin text-primary mb-4" />
+        <p className="text-xl font-body text-muted-foreground">Redirecting...</p>
+      </div>
+    );
+  }
+
+  async function onSubmit(values: CombinedSchemaType) {
+    setIsSubmitting(true);
+    const { password, role, ...userData } = values;
+    
+    // Ensure userData matches the expected structure for signUp
+    const userDetailsForSignUp = {
+        name: userData.name,
+        email: userData.email,
+        organizationName: role === 'organizer' && 'organizationName' in userData ? userData.organizationName : undefined,
+        bio: role === 'organizer' && 'organizerBio' in userData ? userData.organizerBio : undefined,
+    };
+
+    await signUp(userDetailsForSignUp, role as UserRole, password);
+    setIsSubmitting(false);
+    // Redirection handled by AuthContext or page-level useEffects
   }
 
   const handleRoleChange = (value: string) => {
     const newRole = value as UserRole;
     setSelectedRole(newRole);
     form.setValue('role', newRole);
-    // Reset conditional fields when role changes to avoid validation errors on hidden fields
     if (newRole !== 'organizer') {
-      form.setValue('organizationName', '', { shouldValidate: false });
-      form.setValue('organizerBio', '', { shouldValidate: false });
+      form.setValue('organizationName', '', { shouldValidate: true });
+      form.setValue('organizerBio', '', { shouldValidate: true });
     }
-    // You might want to trigger validation or reset specific fields depending on your exact needs
-    form.trigger(); 
+    // Manually trigger validation for all fields due to schema change.
+    // This ensures that if a user switches from organizer to attendee,
+    // the organizer-specific fields are no longer validated if they had errors.
+    Object.keys(form.getValues()).forEach(key => {
+        form.trigger(key as keyof CombinedSchemaType);
+    });
   };
+
+  const currentLoading = authLoading || isSubmitting;
 
   return (
     <>
@@ -96,22 +133,23 @@ export default function SignUpPage() {
                 <FormLabel className="font-headline">I am an...</FormLabel>
                 <FormControl>
                   <RadioGroup
-                    onValueChange={handleRoleChange}
+                    onValueChange={handleRoleChange} // Updated handler
                     defaultValue={field.value}
                     className="grid grid-cols-1 md:grid-cols-3 gap-4"
+                    aria-disabled={currentLoading}
                   >
                     {[
-                      { value: 'attendee', label: 'Attendee', icon: <UserCircle2 className="mr-2 h-5 w-5" /> },
-                      { value: 'organizer', label: 'Organizer', icon: <Building className="mr-2 h-5 w-5" /> },
-                      { value: 'admin', label: 'Admin', icon: <Shield className="mr-2 h-5 w-5" /> },
+                      { value: 'attendee' as UserRole, label: 'Attendee', icon: <UserCircle2 className="mr-2 h-5 w-5" /> },
+                      { value: 'organizer' as UserRole, label: 'Organizer', icon: <Building className="mr-2 h-5 w-5" /> },
+                      { value: 'admin' as UserRole, label: 'Admin', icon: <Shield className="mr-2 h-5 w-5" /> },
                     ].map((roleOption) => (
                       <FormItem key={roleOption.value} className="flex-1">
                         <FormControl>
-                           <RadioGroupItem value={roleOption.value} id={roleOption.value} className="sr-only peer" />
+                           <RadioGroupItem value={roleOption.value} id={roleOption.value} className="sr-only peer" disabled={currentLoading}/>
                         </FormControl>
                         <FormLabel 
                           htmlFor={roleOption.value}
-                          className="flex flex-col items-center justify-between rounded-md border-2 border-muted bg-popover p-4 hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-primary [&:has([data-state=checked])]:border-primary cursor-pointer"
+                          className={`flex flex-col items-center justify-between rounded-md border-2 border-muted bg-popover p-4 hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-primary [&:has([data-state=checked])]:border-primary ${currentLoading ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'}`}
                         >
                           {roleOption.icon}
                           <span className="font-body">{roleOption.label}</span>
@@ -132,7 +170,7 @@ export default function SignUpPage() {
               <FormItem>
                 <FormLabel className="font-headline">Full Name</FormLabel>
                 <FormControl>
-                  <Input placeholder="John Doe" {...field} className="font-body" />
+                  <Input placeholder="John Doe" {...field} className="font-body" disabled={currentLoading}/>
                 </FormControl>
                 <FormMessage />
               </FormItem>
@@ -145,7 +183,7 @@ export default function SignUpPage() {
               <FormItem>
                 <FormLabel className="font-headline">Email Address</FormLabel>
                 <FormControl>
-                  <Input type="email" placeholder="you@example.com" {...field} className="font-body" />
+                  <Input type="email" placeholder="you@example.com" {...field} className="font-body" disabled={currentLoading}/>
                 </FormControl>
                 <FormMessage />
               </FormItem>
@@ -159,13 +197,14 @@ export default function SignUpPage() {
                 <FormLabel className="font-headline">Password</FormLabel>
                 <FormControl>
                   <div className="relative">
-                    <Input type={showPassword ? "text" : "password"} placeholder="••••••••" {...field} className="font-body pr-10" />
+                    <Input type={showPassword ? "text" : "password"} placeholder="••••••••" {...field} className="font-body pr-10" disabled={currentLoading}/>
                     <Button
                       type="button"
                       variant="ghost"
                       size="icon"
                       className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7 text-muted-foreground hover:text-foreground"
                       onClick={() => setShowPassword(!showPassword)}
+                      disabled={currentLoading}
                     >
                       {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                       <span className="sr-only">{showPassword ? "Hide password" : "Show password"}</span>
@@ -186,7 +225,7 @@ export default function SignUpPage() {
                   <FormItem>
                     <FormLabel className="font-headline">Organization Name</FormLabel>
                     <FormControl>
-                      <Input placeholder="Your Company LLC" {...field} className="font-body" />
+                      <Input placeholder="Your Company LLC" {...field} className="font-body" disabled={currentLoading}/>
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -199,7 +238,7 @@ export default function SignUpPage() {
                   <FormItem>
                     <FormLabel className="font-headline">Organizer Bio</FormLabel>
                     <FormControl>
-                      <Textarea placeholder="Tell us about your organization..." {...field} className="font-body" />
+                      <Textarea placeholder="Tell us about your organization..." {...field} className="font-body" disabled={currentLoading}/>
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -208,7 +247,8 @@ export default function SignUpPage() {
             </>
           )}
 
-          <Button type="submit" className="w-full font-body">
+          <Button type="submit" className="w-full font-body" disabled={currentLoading}>
+             {currentLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
             Create Account
           </Button>
         </form>
@@ -224,3 +264,5 @@ export default function SignUpPage() {
     </>
   );
 }
+
+    
