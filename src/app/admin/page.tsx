@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useAuth } from '@/contexts/AuthContext';
@@ -6,6 +7,7 @@ import { useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { ShieldCheck, Users, BarChart3, Settings, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import Link from 'next/link';
 
 export default function AdminPage() {
   const { user, role, isLoading: authLoading } = useAuth();
@@ -45,7 +47,9 @@ export default function AdminPage() {
             <CardDescription className="font-body">View, edit, and manage user accounts.</CardDescription>
           </CardHeader>
           <CardContent>
-            <Button className="w-full font-body" variant="outline" disabled>Manage Users (Coming Soon)</Button>
+            <Button className="w-full font-body" asChild>
+              <Link href="/admin/users">Manage Users</Link>
+            </Button>
           </CardContent>
         </Card>
 
