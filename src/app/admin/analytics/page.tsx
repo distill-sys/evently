@@ -45,29 +45,29 @@ export default function AdminAnalyticsPage() {
         setIsLoadingData(true);
         setFetchError(null);
         try {
-          const [usersCountRes, eventsCountRes, venuesCountRes, userRolesRes] = await Promise.all([
+          const [usersCountRes, eventsCountRes, venuesCountRes, userRolesRpcResult] = await Promise.all([
             supabase.from('users').select('*', { count: 'exact', head: true }),
             supabase.from('events').select('*', { count: 'exact', head: true }),
             supabase.from('venues').select('*', { count: 'exact', head: true }),
-            supabase.from('users').select('role, count').group('role') // Standard Supabase syntax for grouped count
+            supabase.rpc('get_user_role_distribution') // Call the RPC function
           ]);
 
           if (usersCountRes.error) throw usersCountRes.error;
           if (eventsCountRes.error) throw eventsCountRes.error;
           if (venuesCountRes.error) throw venuesCountRes.error;
-          if (userRolesRes.error) {
+          if (userRolesRpcResult.error) {
             console.error(
-              'Error fetching user roles. Message:', userRolesRes.error.message, 
-              'Details:', userRolesRes.error.details, 
-              'Hint:', userRolesRes.error.hint, 
-              'Code:', userRolesRes.error.code
+              'Error fetching user role distribution via RPC. Message:', userRolesRpcResult.error.message,
+              'Details:', userRolesRpcResult.error.details,
+              'Hint:', userRolesRpcResult.error.hint,
+              'Code:', userRolesRpcResult.error.code
             );
-            if (Object.keys(userRolesRes.error).length === 0 || (!userRolesRes.error.message && !userRolesRes.error.details && !userRolesRes.error.hint && !userRolesRes.error.code)) {
-                console.error('Full userRolesRes.error object was empty or lacked specific details.');
+            if (Object.keys(userRolesRpcResult.error).length === 0 || (!userRolesRpcResult.error.message && !userRolesRpcResult.error.details && !userRolesRpcResult.error.hint && !userRolesRpcResult.error.code)) {
+                console.error('Full rpcError object was empty or lacked specific details. RPC call was: get_user_role_distribution');
             } else {
-                console.error('Full userRolesRes.error object:', JSON.stringify(userRolesRes.error, null, 2));
+                console.error('Full rpcError object:', JSON.stringify(userRolesRpcResult.error, null, 2));
             }
-            throw userRolesRes.error;
+            throw userRolesRpcResult.error;
           }
           
           setStats({
@@ -76,9 +76,10 @@ export default function AdminAnalyticsPage() {
             venues: venuesCountRes.count || 0,
           });
           
-          const formattedRolesData = (userRolesRes.data || []).map(item => ({
+          // Map rpcData: { role: 'somerole', user_count: N } to { role: 'somerole', count: N }
+          const formattedRolesData = (userRolesRpcResult.data || []).map(item => ({
             role: item.role || 'Unknown',
-            count: item.count || 0, 
+            count: item.user_count || 0, 
           }));
           setUserRoleData(formattedRolesData as UserRoleDistribution[]);
 
@@ -237,4 +238,3 @@ export default function AdminAnalyticsPage() {
     </div>
   );
 }
-
