@@ -8,6 +8,7 @@ import { createContext, useContext, useState, useEffect, useCallback } from 'rea
 import { supabase } from '@/lib/supabaseClient';
 import type { AuthError, Session, User as SupabaseUser } from '@supabase/supabase-js';
 import { useToast } from '@/hooks/use-toast';
+import { Loader2 } from 'lucide-react'; // Import Loader2
 
 interface AuthContextType {
   user: User | null;
@@ -143,18 +144,25 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         setIsLoading(false);
         console.error("Error inserting user profile:", insertError);
         toast({ title: 'Sign Up Failed', description: `Could not create user profile: ${insertError.message}`, variant: 'destructive'});
-        await supabase.auth.signOut();
+        // Attempt to clean up the auth user if profile creation fails
+        // Note: This might not be desirable in all cases, consider user experience
+        await supabase.auth.signOut(); // Sign out the partially created user session
+        // Optionally, try to delete the auth user if your policies allow admin actions,
+        // but this is complex and usually handled server-side or manually.
+        // For now, just signing out is a safer client-side action.
         return { error: { name: "ProfileCreationError", message: insertError.message } as AuthError };
       }
       
+      // After successful insert, fetch the complete profile to update context
       const newUserProfile = await fetchUserProfile(signUpData.user);
       if (newUserProfile) {
         setUser(newUserProfile);
         setRole(newUserProfile.role || null);
         toast({ title: 'Account Created!', description: `Welcome, ${newUserProfile.name}!` });
       } else {
+         // Fallback if fetchUserProfile fails immediately after insert (should be rare)
          setUser({ id: signUpData.user.id, email: signUpData.user.email!, name: userData.name || "User"});
-         setRole(selectedRole);
+         setRole(selectedRole); // Set role based on selection during sign-up
          toast({ title: 'Account Created! Profile pending.', description: `Welcome!` });
       }
     }
@@ -196,7 +204,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
           router.push('/attendee');
           break;
         case 'organizer':
-          // Ensure user.id is used for the organizer page route if it represents the auth_user_id
           router.push(`/organizer/${user.id}`);
           break;
         case 'admin':
@@ -213,7 +220,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       {!isLoading && children}
       {isLoading && ( 
         <div className="fixed inset-0 bg-background/80 flex items-center justify-center z-[200]">
-          {/* <Loader2 className="h-10 w-10 animate-spin text-primary" /> */}
+          <Loader2 className="h-10 w-10 animate-spin text-primary" />
         </div>
        )}
     </AuthContext.Provider>
@@ -228,3 +235,4 @@ export const useAuth = () => {
   return context;
 };
     
+
