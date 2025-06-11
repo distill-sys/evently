@@ -39,6 +39,7 @@ export interface Event {
   ticket_price_range: string; // e.g., "$20 - $50" or "Free"
   image_url: string;
   organizer_id: string; // Foreign Key to users.auth_user_id
+  venue_id?: string | null; // Optional Foreign Key to venues.venue_id
   created_at?: string;
   updated_at?: string;
   // For joined data from the 'users' table (organizer's details)
@@ -48,6 +49,8 @@ export interface Event {
     organization_name: string | null;
     // include other organizer fields if needed directly in EventCard
   } | null; // Allow null if no organizer found or not joined
+  // Optionally, you could also join venue details here if needed frequently
+  venue?: Pick<Venue, 'name' | 'address' | 'city'> | null;
 }
 
 // This type was previously for mockData, now aligning with UserProfile for organizers
@@ -86,4 +89,3 @@ export interface Venue {
     name: string;
   } | null;
 }
-```
