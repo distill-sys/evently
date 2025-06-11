@@ -1,6 +1,7 @@
 
 'use client';
 
+import React from 'react'; // Added this line
 import { useState } from 'react';
 import Link from 'next/link';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -36,7 +37,7 @@ const organizerSchema = baseSchema.extend({
   organizationName: z.string().min(2, { message: 'Organization name must be at least 2 characters.' }),
   organizerBio: z.string().min(10, { message: 'Bio must be at least 10 characters.' }).max(500, { message: 'Bio must be less than 500 characters.' }),
 });
-const adminSchema = baseSchema; 
+const adminSchema = baseSchema;
 
 type CombinedSchemaType = z.infer<typeof attendeeSchema> | z.infer<typeof organizerSchema> | z.infer<typeof adminSchema>;
 
@@ -62,7 +63,7 @@ export default function SignUpPage() {
     },
     context: { role: selectedRole }, // Pass role to context for conditional validation
   });
-  
+
   // Re-validate when schema changes
   React.useEffect(() => {
     form.trigger();
@@ -83,7 +84,7 @@ export default function SignUpPage() {
   async function onSubmit(values: CombinedSchemaType) {
     setIsSubmitting(true);
     const { password, role, ...userData } = values;
-    
+
     // Ensure userData matches the expected structure for signUp
     const userDetailsForSignUp = {
         name: userData.name,
@@ -147,7 +148,7 @@ export default function SignUpPage() {
                         <FormControl>
                            <RadioGroupItem value={roleOption.value} id={roleOption.value} className="sr-only peer" disabled={currentLoading}/>
                         </FormControl>
-                        <FormLabel 
+                        <FormLabel
                           htmlFor={roleOption.value}
                           className={`flex flex-col items-center justify-between rounded-md border-2 border-muted bg-popover p-4 hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-primary [&:has([data-state=checked])]:border-primary ${currentLoading ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'}`}
                         >
@@ -264,5 +265,3 @@ export default function SignUpPage() {
     </>
   );
 }
-
-    
