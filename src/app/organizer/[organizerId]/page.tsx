@@ -22,9 +22,9 @@ async function getOrganizerDetails(organizerId: string): Promise<UserProfile | n
     .eq('role', 'organizer') // Important: ensure we are fetching an organizer
     .single();
 
-  if (error && error.code !== 'PGRST116') { // PGRST116 (0 rows) is not necessarily an error for .single() if no profile found
+  if (error && error.code !== 'PGRST116') { 
     console.error('OrganizerPage: getOrganizerDetails - Error fetching organizer details:', JSON.stringify(error, null, 2));
-    return null; // Return null on error, let calling function handle
+    return null; 
   }
   console.log(`OrganizerPage: getOrganizerDetails - Data for ${organizerId}:`, data);
   return data as UserProfile | null;
@@ -49,6 +49,10 @@ async function getOrganizerEvents(organizerId: string): Promise<EventType[]> {
       organizer:users ( 
         name,
         organization_name
+      ),
+      venue:venues (
+        name,
+        city
       )
     `)
     .eq('organizer_id', organizerId)
@@ -56,7 +60,7 @@ async function getOrganizerEvents(organizerId: string): Promise<EventType[]> {
 
   if (error) {
     console.error('OrganizerPage: getOrganizerEvents - Error fetching organizer events:', JSON.stringify(error, null, 2));
-    return []; // Return empty array on error
+    return []; 
   }
   console.log(`OrganizerPage: getOrganizerEvents - Events for ${organizerId} count:`, data?.length);
   return (data as EventType[] || []);
@@ -75,7 +79,7 @@ export default function OrganizerPage() {
   const [fetchError, setFetchError] = useState<string | null>(null);
 
   useEffect(() => {
-    const effectId = Date.now(); // For tracking specific effect runs
+    const effectId = Date.now(); 
     console.log(`OrganizerPage[${effectId}]: useEffect triggered. organizerId: ${organizerId}, authLoading: ${authLoading}, current isLoadingPageData: ${isLoadingPageData}`);
 
     if (!organizerId) {
@@ -89,20 +93,16 @@ export default function OrganizerPage() {
 
     if (authLoading) {
         console.log(`OrganizerPage[${effectId}]: Auth is still loading. Waiting for auth to complete before fetching page data.`);
-        // isLoadingPageData should remain true or be set true if it wasn't,
-        // because the page isn't ready to display content.
-        // The main loader `authLoading || isLoadingPageData` will handle showing spinner.
         return;
     }
     
-    // Auth is loaded, and organizerId is present. Proceed to fetch.
     console.log(`OrganizerPage[${effectId}]: Auth loaded. Proceeding to fetch data for organizerId: ${organizerId}`);
 
     async function fetchDataForOrganizer() {
       console.log(`OrganizerPage[${effectId}]: fetchDataForOrganizer called.`);
       setIsLoadingPageData(true); 
       setFetchError(null);
-      setOrganizer(null); // Reset states
+      setOrganizer(null); 
       setOrganizerEvents([]);
 
       try {
@@ -116,7 +116,6 @@ export default function OrganizerPage() {
         if (!details) {
           console.warn(`OrganizerPage[${effectId}]: Organizer details not found or user is not an organizer for ID: ${organizerId}.`);
           setFetchError("Organizer profile not found, or this user account is not configured as an organizer.");
-          // States already reset
         } else {
           setOrganizer(details);
           setOrganizerEvents(events || []); 
@@ -132,10 +131,10 @@ export default function OrganizerPage() {
 
     fetchDataForOrganizer();
 
-  }, [organizerId, authLoading]); // Rerun when organizerId or authLoading status changes
+  }, [organizerId, authLoading]); 
 
   const isViewingOwnProfile = authUser && authUser.id === organizerId && authRole === 'organizer';
-  console.log(`OrganizerPage: Render check. authLoading: ${authLoading}, isLoadingPageData: ${isLoadingPageData}, fetchError: ${fetchError}, organizer: ${!!organizer}, authUser: ${!!authUser}, authRole: ${authRole}`);
+  console.log(`OrganizerPage: Render check. authLoading: ${authLoading}, isLoadingPageData: ${isLoadingPageData}, fetchError: ${fetchError}, organizer: ${!!organizer}, authUser: ${!!authUser}, authRole: ${authRole}, isViewingOwnProfile: ${isViewingOwnProfile}`);
 
 
   if (authLoading || isLoadingPageData) {
@@ -164,7 +163,6 @@ export default function OrganizerPage() {
     );
   }
   
-  // Adapt UserProfile to OrganizerType for OrganizerCard
   const displayOrganizer: OrganizerType = {
     ...organizer,
     id: organizer.auth_user_id, 
@@ -194,7 +192,7 @@ export default function OrganizerPage() {
         {organizerEvents.length > 0 ? (
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
             {organizerEvents.map((event) => (
-              <EventCard key={event.event_id} event={event} />
+              <EventCard key={event.event_id} event={event} isEditable={isViewingOwnProfile} />
             ))}
           </div>
         ) : (

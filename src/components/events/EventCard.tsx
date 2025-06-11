@@ -3,21 +3,21 @@ import type { Event } from '@/lib/types';
 import Image from 'next/image';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { CalendarDays, MapPin, Ticket, Heart, DollarSign, Users } from 'lucide-react';
+import { CalendarDays, MapPin, Ticket, Heart, DollarSign, Users, Edit } from 'lucide-react';
 import Link from 'next/link';
 
 interface EventCardProps {
   event: Event;
+  isEditable?: boolean; // New prop to control visibility of edit button
 }
 
-export default function EventCard({ event }: EventCardProps) {
+export default function EventCard({ event, isEditable = false }: EventCardProps) {
   const eventDate = new Date(event.date).toLocaleDateString('en-US', {
     year: 'numeric',
     month: 'long',
     day: 'numeric',
   });
 
-  // Use the 'organizer' property which now holds the joined data
   const organizerDisplayName = event.organizer?.organization_name || event.organizer?.name || 'Unknown Organizer';
 
   return (
@@ -43,7 +43,7 @@ export default function EventCard({ event }: EventCardProps) {
           </div>
           <div className="flex items-center">
             <MapPin className="h-4 w-4 mr-2 text-primary" />
-            <span>{event.location}</span>
+            <span>{event.venue ? `${event.venue.name}, ${event.venue.city}` : event.location}</span>
           </div>
           <div className="flex items-center">
             <DollarSign className="h-4 w-4 mr-2 text-primary" />
@@ -53,7 +53,7 @@ export default function EventCard({ event }: EventCardProps) {
             <Ticket className="h-4 w-4 mr-2 text-primary" />
             <span>Category: {event.category}</span>
           </div>
-           {event.organizer && ( // Check if organizer info is available (now using event.organizer)
+           {event.organizer && (
              <div className="flex items-center text-xs pt-1">
               <Users className="h-4 w-4 mr-2 text-primary" />
               <span>
@@ -68,6 +68,13 @@ export default function EventCard({ event }: EventCardProps) {
             <Button variant="outline" className="w-full font-body" asChild>
                  <Link href={`/event/${event.event_id}`}>View Details</Link>
             </Button>
+            {isEditable && (
+              <Button variant="secondary" className="font-body" asChild>
+                <Link href={`/organizer/events/${event.event_id}/edit`}>
+                  <Edit className="mr-2 h-4 w-4" /> Edit
+                </Link>
+              </Button>
+            )}
             <Button variant="ghost" size="icon" className="border border-border hover:bg-destructive/10 hover:text-destructive group">
                 <Heart className="h-5 w-5 text-muted-foreground group-hover:fill-destructive" />
                 <span className="sr-only">Save event</span>
