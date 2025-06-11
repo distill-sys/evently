@@ -26,19 +26,35 @@ const loginSchema = z.object({
 });
 
 export default function LoginPage() {
-  const { signIn, isLoading: authLoading, user } = useAuth();
+  const { signIn, isLoading: authLoading, user, role } = useAuth(); // Added role
   const [showPassword, setShowPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isAttemptingRedirect, setIsAttemptingRedirect] = useState(false);
   const router = useRouter();
 
   useEffect(() => {
-    // Redirect if user is already logged in
     if (!authLoading && user && !isAttemptingRedirect) {
       setIsAttemptingRedirect(true);
-      router.push('/dashboard');
+      if (role) {
+        switch (role) {
+          case 'attendee':
+            router.push('/attendee');
+            break;
+          case 'organizer':
+            router.push(`/organizer/${user.id}`);
+            break;
+          case 'admin':
+            router.push('/admin');
+            break;
+          default:
+            router.push('/dashboard'); // Fallback
+            break;
+        }
+      } else {
+        router.push('/dashboard'); // No role, go to dashboard
+      }
     }
-  }, [authLoading, user, router, isAttemptingRedirect]);
+  }, [authLoading, user, role, router, isAttemptingRedirect]); // Added role to dependencies
 
   const form = useForm<z.infer<typeof loginSchema>>({
     resolver: zodResolver(loginSchema),
@@ -57,8 +73,8 @@ export default function LoginPage() {
 
   const currentLoading = authLoading || isSubmitting;
 
-  // Show loading spinner if redirecting
-  if (!authLoading && user) {
+  // Show loading spinner if redirecting or initial auth check is in progress
+  if (authLoading || (!authLoading && user && isAttemptingRedirect)) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[calc(100vh-10rem)]">
         <Loader2 className="h-12 w-12 animate-spin text-primary mb-4" />

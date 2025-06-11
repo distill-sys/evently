@@ -44,7 +44,7 @@ type CombinedSchemaType = z.infer<typeof attendeeSchema> | z.infer<typeof organi
 
 export default function SignUpPage() {
   const [selectedRole, setSelectedRole] = useState<UserRole>('attendee');
-  const { signUp, isLoading: authLoading, user } = useAuth();
+  const { signUp, isLoading: authLoading, user, role: authRole } = useAuth(); // Added authRole
   const [showPassword, setShowPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isAttemptingRedirect, setIsAttemptingRedirect] = useState(false);
@@ -70,27 +70,45 @@ export default function SignUpPage() {
   }, [selectedRole, form]);
 
   useEffect(() => {
-    // Redirect if user is already logged in or has just signed up successfully
     if (!authLoading && user && !isAttemptingRedirect) {
       setIsAttemptingRedirect(true);
-      router.push('/dashboard');
+      if (authRole) { // Role is known from AuthContext
+        switch (authRole) {
+          case 'attendee':
+            router.push('/attendee');
+            break;
+          case 'organizer':
+            router.push(`/organizer/${user.id}`);
+            break;
+          case 'admin':
+            router.push('/admin');
+            break;
+          default:
+            router.push('/dashboard'); // Fallback
+            break;
+        }
+      } else {
+        // This case should ideally not be hit often after signup as role is set.
+        // But if role somehow isn't immediately available, go to dashboard.
+        router.push('/dashboard');
+      }
     }
-  }, [authLoading, user, router, isAttemptingRedirect]);
+  }, [authLoading, user, authRole, router, isAttemptingRedirect]); // Added authRole to dependencies
 
   async function onSubmit(values: CombinedSchemaType) {
     setIsSubmitting(true);
-    const { password, role, ...userData } = values;
+    const { password, role: formRole, ...userData } = values; // Renamed role to formRole to avoid conflict
 
     const userDetailsForSignUp = {
         name: userData.name,
         email: userData.email,
-        organizationName: role === 'organizer' && 'organizationName' in userData ? userData.organizationName : undefined,
-        bio: role === 'organizer' && 'organizerBio' in userData ? userData.organizerBio : undefined,
+        organizationName: formRole === 'organizer' && 'organizationName' in userData ? userData.organizationName : undefined,
+        bio: formRole === 'organizer' && 'organizerBio' in userData ? userData.organizerBio : undefined,
     };
 
-    await signUp(userDetailsForSignUp, role as UserRole, password);
+    await signUp(userDetailsForSignUp, formRole as UserRole, password);
     setIsSubmitting(false);
-    // Redirection is handled by the useEffect above based on authLoading and user state
+    // Redirection is handled by the useEffect above based on authLoading, user, and authRole state
   }
 
   const handleRoleChange = (value: string) => {
@@ -108,8 +126,8 @@ export default function SignUpPage() {
 
   const currentLoading = authLoading || isSubmitting;
 
-  // Show loading spinner if redirecting (i.e., user is set and authLoading is false)
-  if (!authLoading && user) {
+  // Show loading spinner if redirecting or initial auth check is in progress
+  if (authLoading || (!authLoading && user && isAttemptingRedirect)) {
      return (
       <div className="flex flex-col items-center justify-center min-h-[calc(100vh-10rem)]">
         <Loader2 className="h-12 w-12 animate-spin text-primary mb-4" />
