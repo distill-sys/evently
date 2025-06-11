@@ -1,3 +1,4 @@
+
 'use client';
 
 import { Input } from '@/components/ui/input';
@@ -15,6 +16,9 @@ interface SearchFilterBarProps {
   locations: string[];
 }
 
+const ALL_LOCATIONS_VALUE = "--all-locations--";
+const ALL_CATEGORIES_VALUE = "--all-categories--";
+
 export default function SearchFilterBar({ onSearch, categories, locations }: SearchFilterBarProps) {
   const [keyword, setKeyword] = useState('');
   const [location, setLocation] = useState('');
@@ -22,14 +26,19 @@ export default function SearchFilterBar({ onSearch, categories, locations }: Sea
   const [category, setCategory] = useState('');
 
   const handleSearch = () => {
-    onSearch({ keyword, location, date, category });
+    onSearch({ 
+      keyword, 
+      location: location === ALL_LOCATIONS_VALUE ? '' : location, 
+      date, 
+      category: category === ALL_CATEGORIES_VALUE ? '' : category 
+    });
   };
 
   const clearFilters = () => {
     setKeyword('');
-    setLocation('');
+    setLocation(''); // Resets to placeholder
     setDate(undefined);
-    setCategory('');
+    setCategory(''); // Resets to placeholder
     onSearch({ keyword: '', location: '', date: undefined, category: '' });
   }
 
@@ -62,7 +71,7 @@ export default function SearchFilterBar({ onSearch, categories, locations }: Sea
             <SelectValue placeholder="Any Location" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="" className="font-body">Any Location</SelectItem>
+            <SelectItem value={ALL_LOCATIONS_VALUE} className="font-body">Any Location</SelectItem>
             {locations.map(loc => <SelectItem key={loc} value={loc} className="font-body">{loc}</SelectItem>)}
           </SelectContent>
         </Select>
@@ -104,7 +113,7 @@ export default function SearchFilterBar({ onSearch, categories, locations }: Sea
             <SelectValue placeholder="Any Category" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="" className="font-body">Any Category</SelectItem>
+            <SelectItem value={ALL_CATEGORIES_VALUE} className="font-body">Any Category</SelectItem>
             {categories.map(cat => <SelectItem key={cat} value={cat} className="font-body">{cat}</SelectItem>)}
           </SelectContent>
         </Select>

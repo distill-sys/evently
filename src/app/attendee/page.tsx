@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useMemo, useEffect } from 'react';
@@ -37,6 +38,7 @@ export default function AttendeePage() {
         event.description.toLowerCase().includes(filters.keyword.toLowerCase())
       );
     }
+    // An empty string for location or category means no filter is applied for that field.
     if (filters.location) {
       events = events.filter(event => event.location === filters.location);
     }
@@ -44,6 +46,7 @@ export default function AttendeePage() {
       const filterDateStr = filters.date.toISOString().split('T')[0];
       events = events.filter(event => event.date === filterDateStr);
     }
+    // An empty string for location or category means no filter is applied for that field.
     if (filters.category) {
       events = events.filter(event => event.category === filters.category);
     }
