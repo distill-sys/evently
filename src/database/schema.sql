@@ -1,58 +1,37 @@
 
--- Enable UUID generation
-CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
-
--- Users Table (for all roles: attendee, organizer, admin)
-DROP TABLE IF EXISTS users CASCADE;
-CREATE TABLE users (
-  auth_user_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(), -- Corresponds to Supabase auth.users.id
+-- Create users table
+CREATE TABLE IF NOT EXISTS users (
+  auth_user_id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
   email TEXT UNIQUE NOT NULL,
   name TEXT NOT NULL,
-  role TEXT CHECK (role IN ('attendee', 'organizer', 'admin')) NOT NULL,
-  organization_name TEXT, -- For organizers
-  bio TEXT, -- For organizers
-  profile_picture_url TEXT, -- For organizers, can be a placeholder
+  role TEXT NOT NULL CHECK (role IN ('attendee', 'organizer', 'admin')),
+  organization_name TEXT,
+  bio TEXT,
+  profile_picture_url TEXT,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
-ALTER TABLE users ENABLE ROW LEVEL SECURITY; -- Initially off as requested, but good practice to note
 
--- Events Table
-DROP TABLE IF EXISTS events CASCADE;
-CREATE TABLE events (
-  event_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  organizer_id UUID REFERENCES users(auth_user_id) ON DELETE CASCADE,
+-- Create events table
+CREATE TABLE IF NOT EXISTS events (
+  event_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   title TEXT NOT NULL,
-  description TEXT,
+  description TEXT NOT NULL,
   date DATE NOT NULL,
-  time TEXT, -- e.g., "9:00 AM - 5:00 PM"
-  location TEXT,
-  category TEXT,
-  ticket_price_range TEXT, -- e.g., "$20 - $50" or "Free"
+  time TEXT NOT NULL, -- e.g., "10:00 AM - 5:00 PM"
+  location TEXT NOT NULL,
+  category TEXT NOT NULL,
+  ticket_price_range TEXT NOT NULL, -- e.g., "$20 - $50" or "Free"
   image_url TEXT,
+  organizer_id UUID REFERENCES users(auth_user_id) ON DELETE SET NULL, -- Link to users table
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
-ALTER TABLE events ENABLE ROW LEVEL SECURITY;
 
--- Event Registrations (Tickets) Table
-DROP TABLE IF EXISTS event_registrations CASCADE;
-CREATE TABLE event_registrations (
-  registration_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  event_id UUID REFERENCES events(event_id) ON DELETE CASCADE,
-  attendee_id UUID REFERENCES users(auth_user_id) ON DELETE CASCADE, -- User with 'attendee' role
-  registration_date TIMESTAMPTZ DEFAULT NOW(),
-  ticket_type TEXT, -- e.g., "General Admission", "VIP"
-  price_paid NUMERIC(10, 2),
-  status TEXT DEFAULT 'confirmed' CHECK (status IN ('confirmed', 'cancelled', 'pending')),
-  UNIQUE (event_id, attendee_id) -- An attendee can register for an event only once (can be adjusted if multiple tickets allowed)
-);
-ALTER TABLE event_registrations ENABLE ROW LEVEL SECURITY;
-
--- Saved Payment Methods (Mocked for security, PCI compliance is complex)
-DROP TABLE IF EXISTS saved_payment_methods CASCADE;
-CREATE TABLE saved_payment_methods (
-  payment_method_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+-- Create saved_payment_methods table (Example, adjust as needed)
+-- This is a simplified example. In a real app, you'd use a payment gateway's tokenization.
+CREATE TABLE IF NOT EXISTS saved_payment_methods (
+  payment_method_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID REFERENCES users(auth_user_id) ON DELETE CASCADE,
   card_type TEXT, -- e.g., "Visa", "Mastercard"
   last4 TEXT, -- Last 4 digits of the card
@@ -60,31 +39,31 @@ CREATE TABLE saved_payment_methods (
   is_default BOOLEAN DEFAULT FALSE,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- Create RLS policies
+-- Allow public read access to events
+ALTER TABLE events ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Allow public read access to events" ON events FOR SELECT USING (true);
+
+-- Allow public read access to user profiles (organizers)
+ALTER TABLE users ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Allow public read access to user profiles" ON users FOR SELECT USING (true);
+
+-- Allow users to manage their own profile
+CREATE POLICY "Allow users to update their own profile" ON users
+  FOR UPDATE USING (auth.uid() = auth_user_id) WITH CHECK (auth.uid() = auth_user_id);
+
+-- Allow users to insert their own profile after signup
+CREATE POLICY "Allow users to insert their own profile" ON users
+  FOR INSERT WITH CHECK (auth.uid() = auth_user_id);
+
+-- Allow authenticated users to manage their own payment methods
 ALTER TABLE saved_payment_methods ENABLE ROW LEVEL SECURITY;
-
--- User Saved/Favorited Events
-DROP TABLE IF EXISTS user_saved_events CASCADE;
-CREATE TABLE user_saved_events (
-  saved_event_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  user_id UUID REFERENCES users(auth_user_id) ON DELETE CASCADE,
-  event_id UUID REFERENCES events(event_id) ON DELETE CASCADE,
-  saved_at TIMESTAMPTZ DEFAULT NOW(),
-  UNIQUE (user_id, event_id) -- User can save an event only once
-);
-ALTER TABLE user_saved_events ENABLE ROW LEVEL SECURITY;
-
--- User Event Views (for browsing history, recommendations)
-DROP TABLE IF EXISTS user_event_views CASCADE;
-CREATE TABLE user_event_views (
-  view_id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  user_id UUID REFERENCES users(auth_user_id) ON DELETE CASCADE,
-  event_id UUID REFERENCES events(event_id) ON DELETE CASCADE,
-  viewed_at TIMESTAMPTZ DEFAULT NOW()
-);
-ALTER TABLE user_event_views ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Allow users to manage their own payment methods" ON saved_payment_methods
+  FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
 
 
--- Function to update 'updated_at' timestamp
+-- Function to automatically update 'updated_at' timestamp
 CREATE OR REPLACE FUNCTION trigger_set_timestamp()
 RETURNS TRIGGER AS $$
 BEGIN
@@ -93,138 +72,123 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- Triggers for 'updated_at'
-CREATE TRIGGER set_users_updated_at
+-- Trigger for 'users' table
+CREATE TRIGGER set_timestamp_users
 BEFORE UPDATE ON users
 FOR EACH ROW
 EXECUTE FUNCTION trigger_set_timestamp();
 
-CREATE TRIGGER set_events_updated_at
+-- Trigger for 'events' table
+CREATE TRIGGER set_timestamp_events
 BEFORE UPDATE ON events
 FOR EACH ROW
 EXECUTE FUNCTION trigger_set_timestamp();
 
--- Turn off RLS for all tables as requested (Not recommended for production without careful consideration)
-ALTER TABLE users DISABLE ROW LEVEL SECURITY;
-ALTER TABLE events DISABLE ROW LEVEL SECURITY;
-ALTER TABLE event_registrations DISABLE ROW LEVEL SECURITY;
-ALTER TABLE saved_payment_methods DISABLE ROW LEVEL SECURITY;
-ALTER TABLE user_saved_events DISABLE ROW LEVEL SECURITY;
-ALTER TABLE user_event_views DISABLE ROW LEVEL SECURITY;
+-- Sample Data (Ensure these UUIDs for auth_user_id exist in your auth.users table after signup)
+-- Or, replace with actual UUIDs from your Supabase auth.users table.
+-- For this example, we'll use placeholders and assume you will replace them or create users with these details.
 
+-- To get actual auth_user_ids, sign up users via the app or Supabase dashboard,
+-- then query `select id, email from auth.users;`
+-- and replace 'auth-user-attendee1', 'auth-user-org1', etc. with real UUIDs.
 
--- SAMPLE DATA --
+-- Sample Organizers (replace with actual auth_user_id after creating these users via auth)
+-- Example: If you sign up an organizer with 'organizer1@example.com'
+-- And their auth.users.id is 'xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx'
+-- Then use that UUID for auth_user_id below.
 
--- Insert Sample Users (including organizers)
--- Replace with actual Supabase auth user IDs if you are manually creating these after sign-up.
--- For this sample, we'll assume these auth_user_ids exist or will be created.
--- It's often better to let the app's sign-up process create these user entries linked to actual auth.users.
--- For demo purposes, creating some directly:
+-- Let's assume you've signed up these users and obtained their auth.users IDs:
+-- organizer1@example.com -> auth_user_id: '00000000-0000-0000-0000-000000000001' (Replace with actual)
+-- organizer2@example.com -> auth_user_id: '00000000-0000-0000-0000-000000000002' (Replace with actual)
+-- organizer3@example.com -> auth_user_id: '00000000-0000-0000-0000-000000000003' (Replace with actual)
 
+-- To make this script runnable, you might need to create these auth users first,
+-- or temporarily disable the foreign key constraint if inserting dummy profiles without matching auth users.
+-- For this script, we'll provide example UUIDs. YOU MUST REPLACE THEM WITH ACTUAL AUTH.USERS IDs.
+-- Consider these as placeholders.
+
+-- Insert sample users (Organizers)
+-- Replace these placeholder UUIDs with actual auth_user_id from your Supabase auth.users table
 DO $$
 DECLARE
-    org1_uuid UUID := uuid_generate_v4();
-    org2_uuid UUID := uuid_generate_v4();
-    attendee1_uuid UUID := uuid_generate_v4();
+    org1_auth_id UUID := '00000000-0000-0000-0000-000000000001'; -- Replace!
+    org2_auth_id UUID := '00000000-0000-0000-0000-000000000002'; -- Replace!
+    org3_auth_id UUID := '00000000-0000-0000-0000-000000000003'; -- Replace!
 BEGIN
-    -- Ensure these UUIDs correspond to actual entries in auth.users if testing with real auth
-    -- For a clean slate, you might sign up these users through your app first.
+    -- Check if users exist to avoid error if script is run multiple times.
+    -- This requires a Supabase user with these emails/IDs to be created via the Auth system first.
+    -- For a fresh setup, you would run the auth user creation, then get their IDs, then run this.
 
-    -- Organizer 1
+    -- Upsert Organizer 1
     INSERT INTO users (auth_user_id, email, name, role, organization_name, bio, profile_picture_url)
-    VALUES (org1_uuid, 'organizer1@example.com', 'Tech Conferences Global', 'organizer', 'Tech Conferences Global LLC', 'Hosting premier tech conferences worldwide since 2010. Join us for cutting-edge insights and networking.', 'https://placehold.co/100x100.png')
-    ON CONFLICT (email) DO NOTHING;
+    VALUES (org1_auth_id, 'organizer1@example.com', 'Tech Conferences Global', 'organizer', 'TechCon Global', 'Leading organizers of premier technology conferences.', 'https://placehold.co/100x100.png')
+    ON CONFLICT (auth_user_id) DO UPDATE SET
+        email = EXCLUDED.email,
+        name = EXCLUDED.name,
+        role = EXCLUDED.role,
+        organization_name = EXCLUDED.organization_name,
+        bio = EXCLUDED.bio,
+        profile_picture_url = EXCLUDED.profile_picture_url,
+        updated_at = NOW();
 
-    -- Organizer 2
+    -- Upsert Organizer 2
     INSERT INTO users (auth_user_id, email, name, role, organization_name, bio, profile_picture_url)
-    VALUES (org2_uuid, 'musicfest@example.com', 'Indie Fest Productions', 'organizer', 'Indie Fest Productions', 'Curating unforgettable music festival experiences with a focus on independent artists and community vibes.', 'https://placehold.co/100x100.png')
-    ON CONFLICT (email) DO NOTHING;
+    VALUES (org2_auth_id, 'organizer2@example.com', 'SoundWave Festivals', 'organizer', 'SoundWave Fests', 'Bringing you the best music festivals with top artists.', 'https://placehold.co/100x100.png')
+    ON CONFLICT (auth_user_id) DO UPDATE SET
+        email = EXCLUDED.email,
+        name = EXCLUDED.name,
+        role = EXCLUDED.role,
+        organization_name = EXCLUDED.organization_name,
+        bio = EXCLUDED.bio,
+        profile_picture_url = EXCLUDED.profile_picture_url,
+        updated_at = NOW();
 
-    -- Attendee 1
-    INSERT INTO users (auth_user_id, email, name, role)
-    VALUES (attendee1_uuid, 'attendee1@example.com', 'Amin Danial', 'attendee')
-    ON CONFLICT (email) DO NOTHING;
+    -- Upsert Organizer 3
+    INSERT INTO users (auth_user_id, email, name, role, organization_name, bio, profile_picture_url)
+    VALUES (org3_auth_id, 'organizer3@example.com', 'Art & Culture Now', 'organizer', 'ArtCulture Now', 'Curators of fine art exhibitions and cultural showcases.', 'https://placehold.co/100x100.png')
+    ON CONFLICT (auth_user_id) DO UPDATE SET
+        email = EXCLUDED.email,
+        name = EXCLUDED.name,
+        role = EXCLUDED.role,
+        organization_name = EXCLUDED.organization_name,
+        bio = EXCLUDED.bio,
+        profile_picture_url = EXCLUDED.profile_picture_url,
+        updated_at = NOW();
 
-
-    -- Insert Sample Events
-    -- Event 1 by Organizer 1
-    INSERT INTO events (event_id, organizer_id, title, description, date, time, location, category, ticket_price_range, image_url)
-    VALUES (
-        uuid_generate_v4(),
-        org1_uuid,
-        'InnovateAI Summit 2024',
-        'Explore the future of Artificial Intelligence with leading researchers, developers, and ethicists. Keynotes, workshops, and panel discussions.',
-        '2024-10-20',
-        '9:00 AM - 6:00 PM PST',
-        'San Francisco, CA & Online',
-        'Technology',
-        '$199 - $599',
-        'https://placehold.co/600x400.png'
-    );
-
-    -- Event 2 by Organizer 1
-    INSERT INTO events (event_id, organizer_id, title, description, date, time, location, category, ticket_price_range, image_url)
-    VALUES (
-        uuid_generate_v4(),
-        org1_uuid,
-        'WebDev Masters Workshop',
-        'A hands-on workshop for advanced web developers. Dive deep into modern frameworks, performance optimization, and security best practices.',
-        '2024-11-15',
-        '10:00 AM - 4:00 PM EST',
-        'Online',
-        'Technology',
-        '$149',
-        'https://placehold.co/600x400.png'
-    );
-
-    -- Event 3 by Organizer 2
-    INSERT INTO events (event_id, organizer_id, title, description, date, time, location, category, ticket_price_range, image_url)
-    VALUES (
-        uuid_generate_v4(),
-        org2_uuid,
-        'Echoes & Rhythms Fest',
-        'A 3-day outdoor music festival celebrating diverse genres. Featuring indie bands, electronic artists, and folk musicians.',
-        '2024-08-23',
-        'Fri 2PM - Sun 11PM',
-        'Willow Creek Park, Denver, CO',
-        'Music',
-        '$65 (Day) - $150 (3-Day Pass)',
-        'https://placehold.co/600x400.png'
-    );
-
-    -- Event 4 by Organizer 2
-    INSERT INTO events (event_id, organizer_id, title, description, date, time, location, category, ticket_price_range, image_url)
-    VALUES (
-        uuid_generate_v4(),
-        org2_uuid,
-        'Acoustic Nights Showcase',
-        'An intimate evening with talented singer-songwriters. Enjoy original music in a cozy, relaxed atmosphere.',
-        '2024-09-12',
-        '7:30 PM - 10:00 PM',
-        'The Local Brew Cafe, Austin, TX',
-        'Music',
-        '$15 - $25',
-        'https://placehold.co/600x400.png'
-    );
-
-    -- Event 5 (General, could be by Org1 or a new one)
-    INSERT INTO events (event_id, organizer_id, title, description, date, time, location, category, ticket_price_range, image_url)
-    VALUES (
-        uuid_generate_v4(),
-        org1_uuid,
-        'Digital Art & Design Expo',
-        'Discover groundbreaking digital art and innovative design solutions. Meet artists, attend talks, and explore interactive exhibits.',
-        '2024-07-30',
-        '11:00 AM - 7:00 PM',
-        'Metro Convention Center, Chicago, IL',
-        'Arts & Culture',
-        'Free Entry (Registration Required)',
-        'https://placehold.co/600x400.png'
-    );
+    -- Insert sample events, referencing the organizer_id placeholders
+    -- If an event with the same title and date by the same organizer exists, update it.
+    INSERT INTO events (title, description, date, time, location, category, ticket_price_range, image_url, organizer_id)
+    VALUES
+      ('Global Tech Summit 2024', 'Join industry leaders and innovators to discuss the latest trends in technology.', '2024-10-15', '9:00 AM - 5:00 PM', 'San Francisco, CA', 'Technology', '$299 - $799', 'https://placehold.co/600x400.png', org1_auth_id),
+      ('Summer Sounds Music Festival', 'An outdoor music festival featuring top international artists and bands.', '2024-07-20', '12:00 PM - 11:00 PM', 'Central Park, New York', 'Music', '$75 - $150', 'https://placehold.co/600x400.png', org2_auth_id),
+      ('Modern Art Exhibition', 'A curated collection of modern art from emerging and established artists.', '2024-09-05', '10:00 AM - 6:00 PM', 'City Art Gallery, London', 'Arts & Culture', 'Free - $25', 'https://placehold.co/600x400.png', org3_auth_id),
+      ('AI in Business Conference', 'Explore the practical applications of AI in various business sectors.', '2024-11-10', '9:30 AM - 4:30 PM', 'Online', 'Technology', '$99 - $199', 'https://placehold.co/600x400.png', org1_auth_id),
+      ('Indie Rock Showcase', 'Discover the best new indie rock bands in an intimate venue setting.', '2024-08-15', '7:00 PM - 11:00 PM', 'The Underground Venue, Chicago', 'Music', '$20 - $35', 'https://placehold.co/600x400.png', org2_auth_id),
+      ('Photography Masterclass', 'Learn advanced photography techniques from a renowned professional photographer.', '2024-09-22', '1:00 PM - 5:00 PM', 'Creative Studio Hub, Berlin', 'Workshop', '$150', 'https://placehold.co/600x400.png', org3_auth_id),
+      ('Startup Pitch Night', 'Watch innovative startups pitch their ideas to a panel of investors.', '2024-10-01', '6:00 PM - 9:00 PM', 'Innovation Hub, Austin', 'Business', 'Free (RSVP Required)', 'https://placehold.co/600x400.png', org1_auth_id),
+      ('Jazz Evening by the River', 'Relax to smooth jazz tunes under the stars.', '2024-08-25', '7:30 PM - 10:00 PM', 'Riverside Amphitheater, New Orleans', 'Music', '$30', 'https://placehold.co/600x400.png', org2_auth_id),
+      ('Culinary Arts Festival', 'Taste dishes from world-renowned chefs and local culinary talents.', '2024-11-02', '11:00 AM - 8:00 PM', 'Grand Food Park, Paris', 'Food & Drink', '$50 (All Access)', 'https://placehold.co/600x400.png', org3_auth_id),
+      ('Web Development Bootcamp Finale', 'See the final projects from our latest cohort of web developers.', '2024-12-05', '2:00 PM - 5:00 PM', 'Tech Training Center, Seattle', 'Education', 'Free', 'https://placehold.co/600x400.png', org1_auth_id)
+    ON CONFLICT (title, date, organizer_id) DO UPDATE SET
+        description = EXCLUDED.description,
+        time = EXCLUDED.time,
+        location = EXCLUDED.location,
+        category = EXCLUDED.category,
+        ticket_price_range = EXCLUDED.ticket_price_range,
+        image_url = EXCLUDED.image_url,
+        updated_at = NOW();
 END $$;
 
 
--- Note: For a real application, ensure RLS policies are correctly configured if you enable RLS.
--- The sample data uses uuid_generate_v4() for primary keys.
--- Organizer_id in events table should correspond to an auth_user_id from users table with 'organizer' role.
--- Profile picture URLs are placeholders.
+-- Note on `auth_user_id` placeholders:
+-- For this script to fully work, you need to:
+-- 1. Sign up three users in your Supabase application that will serve as organizers.
+--    (e.g., organizer1@example.com, organizer2@example.com, organizer3@example.com)
+-- 2. Go to your Supabase Dashboard -> SQL Editor.
+-- 3. Run `SELECT id, email FROM auth.users;`
+-- 4. Copy the `id` (UUID) for each of these organizer users.
+-- 5. Replace the placeholder UUIDs (e.g., '00000000-0000-0000-0000-000000000001') in the `DO $$ ... END $$;` block above
+--    with the actual UUIDs you copied.
+-- 6. Then, run this entire SQL script.
+-- This ensures that the `organizer_id` in the `events` table correctly references actual authenticated users.
+-- The `ON CONFLICT` clauses are added to make the script idempotent for easier re-running.
