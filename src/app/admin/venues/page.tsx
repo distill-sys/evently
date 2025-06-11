@@ -40,7 +40,18 @@ export default function AdminVenuesPage() {
           .order('created_at', { ascending: false });
 
         if (error) {
-          console.error('Error fetching venues:', error);
+          console.error(
+            'Error fetching venues. Message:', error.message, 
+            'Details:', error.details, 
+            'Hint:', error.hint, 
+            'Code:', error.code
+          );
+          // Log the full error object too for inspection if the above are undefined/empty
+          if (Object.keys(error).length === 0 || (!error.message && !error.details && !error.hint && !error.code)) {
+            console.error('Full error object was empty or lacked specific details. Query was: supabase.from(\'venues\').select(`*, creator:users (name)`).order(\'created_at\', { ascending: false })');
+          } else {
+            console.error('Full error object:', JSON.stringify(error, null, 2));
+          }
           setFetchError('Could not fetch venues. Please try again later.');
           setVenues([]);
         } else {
