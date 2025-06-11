@@ -37,19 +37,31 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       .eq('auth_user_id', supabaseUser.id)
       .single();
 
-    if (error && error.code !== 'PGRST116') {
+    if (error && error.code !== 'PGRST116') { // PGRST116 means "exactly one row was expected, but 0 or more than 1 were found"
+      const isRecursionError = error.code === '42P17'; // PostgreSQL "infinite recursion" error code
+      const recursionMessage = "Database RLS Error: Infinite recursion detected in policy for 'users' table. Please check and fix your RLS policies in the Supabase SQL Editor. The 'public.is_admin()' function and related policies might be misconfigured.";
+      
       console.error(
-        'Error fetching user profile. Message:', error.message,
+        isRecursionError ? recursionMessage : 'Error fetching user profile. Message:', error.message,
         'Details:', error.details,
         'Hint:', error.hint,
         'Code:', error.code
       );
-      if (Object.keys(error).length === 0 || (!error.message && !error.details && !error.hint && !error.code)) {
-          console.error('Full error object was empty or lacked specific details. Querying for columns: name, role, organization_name, bio, profile_picture_url. Filter: auth_user_id =', supabaseUser.id);
-      } else {
-          console.error('Full error object:', JSON.stringify(error, null, 2));
+
+      if (!isRecursionError) {
+        if (Object.keys(error).length === 0 || (!error.message && !error.details && !error.hint && !error.code)) {
+            console.error('Full error object was empty or lacked specific details. Querying for columns: name, role, organization_name, bio, profile_picture_url. Filter: auth_user_id =', supabaseUser.id);
+        } else {
+            console.error('Full error object:', JSON.stringify(error, null, 2));
+        }
       }
-      toast({ title: 'Error', description: 'Could not fetch user profile.', variant: 'destructive' });
+      
+      toast({ 
+        title: isRecursionError ? 'Database RLS Policy Error' : 'Error Fetching Profile', 
+        description: isRecursionError ? recursionMessage : 'Could not fetch user profile.', 
+        variant: 'destructive',
+        duration: isRecursionError ? 20000 : 5000 // Longer duration for critical RLS error
+      });
       return null;
     }
 
@@ -65,7 +77,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         profilePictureUrl: profile.profile_picture_url,
       };
     }
-    console.log('No user profile found for:', supabaseUser.id);
+    console.log('No user profile found for:', supabaseUser.id); // This can be normal if PGRST116 and profile is null
     return null;
   }, [toast]);
 
@@ -81,12 +93,14 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
             setUser(userProfile);
             setRole(userProfile.role || null);
           } else {
+            // If fetchUserProfile returned null (e.g., due to RLS error or no profile yet),
+            // set a minimal user object from Supabase auth user.
             setUser({
               id: session.user.id,
               email: session.user.email || '',
-              name: session.user.email?.split('@')[0] || 'User',
+              name: session.user.email?.split('@')[0] || 'User', // Fallback name
             });
-            setRole(null);
+            setRole(null); // Role is unknown or couldn't be fetched
           }
         } else {
           setUser(null);
@@ -151,7 +165,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     if (signUpData.user) {
       const insertPayload = {
         auth_user_id: signUpData.user.id,
-        email: signUpData.user.email, // email should be defined if signUpData.user exists
+        email: signUpData.user.email, 
         name: userData.name || 'New User',
         role: selectedRole,
         organization_name: selectedRole === 'organizer' ? userData.organizationName : null,
@@ -164,42 +178,43 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         .from('users')
         .insert(insertPayload)
         .select()
-        .single(); // Attempt to get the inserted row back
+        .single(); 
 
       console.log('User profile insert operation completed. Error:', insertError, 'Data:', insertedProfileData);
 
       if (insertError) {
         setIsLoading(false); 
+        const isRecursionError = insertError.code === '42P17';
+        const recursionMessage = "Database RLS Error: Infinite recursion detected. User account created in auth, but profile creation failed due to RLS policy issues on 'users' table. Please fix RLS policies in Supabase SQL Editor.";
+
         console.error(
-            'Error inserting user profile. Message:', insertError.message,
+            isRecursionError ? recursionMessage : 'Error inserting user profile. Message:', insertError.message,
             'Details:', insertError.details,
             'Hint:', insertError.hint,
             'Code:', insertError.code
         );
-        if (Object.keys(insertError).length === 0 || (!insertError.message && !insertError.details && !insertError.hint && !insertError.code)) {
-            console.error('Full insertError object was empty or lacked specific details. Payload was:', insertPayload);
-        } else {
-            console.error('Full insertError object:', JSON.stringify(insertError, null, 2), '. Payload was:', insertPayload);
+        if (!isRecursionError) {
+            if (Object.keys(insertError).length === 0 || (!insertError.message && !insertError.details && !insertError.hint && !insertError.code)) {
+                console.error('Full insertError object was empty or lacked specific details. Payload was:', insertPayload);
+            } else {
+                console.error('Full insertError object:', JSON.stringify(insertError, null, 2), '. Payload was:', insertPayload);
+            }
         }
-        toast({ title: 'Sign Up Failed', description: `Could not create user profile: ${insertError.message || 'Unknown profile creation error.'}`, variant: 'destructive'});
-        // Consider deleting the auth.users entry here if profile creation fails and you have admin rights,
-        // or guide the user to try again or contact support.
-        // For now, we return the error. The auth user might be orphaned.
-        return { error: { name: "ProfileCreationError", message: insertError.message || 'Unknown profile creation error.' } as AuthError };
+        toast({ 
+            title: isRecursionError ? 'Database RLS Policy Error' : 'Sign Up Failed', 
+            description: isRecursionError ? recursionMessage : `Could not create user profile: ${insertError.message || 'Unknown profile creation error.'}`, 
+            variant: 'destructive',
+            duration: isRecursionError ? 20000 : 5000
+        });
+        return { error: { name: "ProfileCreationError", message: isRecursionError ? recursionMessage : (insertError.message || 'Unknown profile creation error.') } as AuthError };
       }
       
       console.log('User profile inserted successfully:', insertedProfileData);
       toast({ title: 'Account Created!', description: `Welcome, ${userData.name || 'User'}! Please check your email to confirm your account if required.` });
       // onAuthStateChange will set isLoading to false after processing.
     } else {
-      // This case implies supabase.auth.signUp succeeded (no signUpError) but signUpData.user is null.
-      // This can happen if "Email confirmation" is enabled and you're checking signUpData.session instead of signUpData.user
-      // However, signUpData.user should generally be populated.
       setIsLoading(false); 
       console.warn("Supabase auth.signUp was successful but signUpData.user is null. This might be expected if email confirmation is required and no immediate session is created. Full signUpData:", signUpData);
-      // If email confirmation is on, this path might be okay, but the profile insert would fail above.
-      // For clarity, let's assume profile insertion is critical.
-      // If `signUpData.user` is null, we can't create a profile link.
       const noUserError = { name: "NoUserObjectAfterSignUp", message: "Sign up process anomaly: no user object returned from auth system to link profile." } as AuthError;
       toast({ title: 'Sign Up Issue', description: "Your account needs email confirmation, or an unexpected issue occurred. Profile not created yet.", variant: 'destructive'});
       return { error: noUserError };
@@ -211,9 +226,9 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     setIsLoading(true);
     console.log('Attempting logout.');
     await supabase.auth.signOut();
-    // setUser, setRole, and setIsLoading(false) will be handled by onAuthStateChange
     router.push('/'); 
     toast({ title: 'Logged Out', description: 'You have been successfully logged out.' });
+    // setUser, setRole, and setIsLoading(false) will be handled by onAuthStateChange
   };
 
   const selectRole = async (selectedRole: UserRole) => {
@@ -227,8 +242,15 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
       if (error) {
         setIsLoading(false);
-        console.error('Role selection failed:', error);
-        toast({ title: 'Error', description: `Could not update role: ${error.message}`, variant: 'destructive'});
+        const isRecursionError = error.code === '42P17';
+        const recursionMessage = "Database RLS Error: Infinite recursion detected when updating role. Please check your RLS policies in the Supabase SQL Editor.";
+        console.error(isRecursionError ? recursionMessage : 'Role selection failed:', error);
+        toast({ 
+          title: isRecursionError ? 'Database RLS Policy Error' : 'Error', 
+          description: isRecursionError ? recursionMessage : `Could not update role: ${error.message}`, 
+          variant: 'destructive',
+          duration: isRecursionError ? 20000 : 5000
+        });
         return;
       }
 
