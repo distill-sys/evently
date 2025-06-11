@@ -49,7 +49,7 @@ export default function AdminAnalyticsPage() {
             supabase.from('users').select('*', { count: 'exact', head: true }),
             supabase.from('events').select('*', { count: 'exact', head: true }),
             supabase.from('venues').select('*', { count: 'exact', head: true }),
-            supabase.from('users').select('role, count:id.count').groupedBy('role')
+            supabase.from('users').select('role, count:id').group('role') // Corrected line
           ]);
 
           if (usersCountRes.error) throw usersCountRes.error;
