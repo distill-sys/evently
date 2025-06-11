@@ -34,7 +34,7 @@ export interface Event {
   description: string;
   date: string; // ISO string for date YYYY-MM-DD
   time: string; // e.g., "10:00 AM - 5:00 PM"
-  location: string;
+  location: string; // Used if no venue_id, or for specific instructions
   category: string;
   ticket_price_range: string; // e.g., "$20 - $50" or "Free"
   image_url: string;
@@ -89,3 +89,4 @@ export interface Venue {
     name: string;
   } | null;
 }
+```
