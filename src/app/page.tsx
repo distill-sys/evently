@@ -1,11 +1,47 @@
+
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import EventCard from '@/components/events/EventCard';
-import { mockEvents } from '@/lib/mockData';
+import type { Event } from '@/lib/types';
+import { supabase } from '@/lib/supabaseClient';
 import { CalendarDays, MapPin, Search } from 'lucide-react';
 
-export default function HomePage() {
-  const featuredEvents = mockEvents.slice(0, 3);
+async function getFeaturedEvents(): Promise<Event[]> {
+  // Fetch a few events, e.g., order by creation date or a specific 'featured' flag if you add one.
+  // Joining with users table to get organizer name.
+  // The 'users' table is aliased to 'users' in the select if not specified otherwise with a custom alias.
+  const { data, error } = await supabase
+    .from('events')
+    .select(`
+      event_id,
+      title,
+      description,
+      date,
+      time,
+      location,
+      category,
+      ticket_price_range,
+      image_url,
+      organizer_id,
+      users (
+        name,
+        organization_name
+      )
+    `)
+    .limit(3) // Get 3 featured events
+    .order('created_at', { ascending: false }); // Example: newest events first
+
+  if (error) {
+    console.error('Error fetching featured events:', error);
+    return [];
+  }
+  // Supabase returns the joined table as a property with the table name, e.g., event.users
+  return data as Event[] || [];
+}
+
+
+export default async function HomePage() {
+  const featuredEvents = await getFeaturedEvents();
 
   return (
     <div className="space-y-16 py-8">
@@ -64,11 +100,15 @@ export default function HomePage() {
       {/* Featured Events Section */}
       <section className="container mx-auto px-4">
         <h2 className="text-4xl font-headline font-semibold text-center mb-12">Featured Events</h2>
-        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
-          {featuredEvents.map((event) => (
-            <EventCard key={event.id} event={event} />
-          ))}
-        </div>
+        {featuredEvents.length > 0 ? (
+          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
+            {featuredEvents.map((event) => (
+              <EventCard key={event.event_id} event={event} />
+            ))}
+          </div>
+        ) : (
+          <p className="text-center font-body text-muted-foreground">No featured events available at the moment. Check back soon!</p>
+        )}
         <div className="text-center mt-12">
           <Button size="lg" variant="link" asChild>
             <Link href="/attendee" className="font-body text-lg">

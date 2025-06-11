@@ -1,39 +1,64 @@
+
 export type UserRole = 'attendee' | 'organizer' | 'admin';
 
-export interface User {
-  id: string;
+// Represents the structure in your 'users' table
+export interface UserProfile {
+  auth_user_id: string; // Primary Key, maps to Supabase auth.users.id
   email: string;
   name: string;
-  role?: UserRole; // Role might be selected after initial signup/login
-  // Add role-specific fields if necessary
-  organizationName?: string; // For organizers
-  bio?: string; // For organizers
+  role: UserRole;
+  organization_name?: string | null;
+  bio?: string | null;
+  profile_picture_url?: string | null;
+  created_at?: string;
+  updated_at?: string;
 }
 
+// Represents the user object used within the AuthContext and application state
+export interface User {
+  id: string; // Supabase auth.users.id
+  email: string;
+  name: string; // From UserProfile
+  role?: UserRole; // From UserProfile
+  organizationName?: string | null; // From UserProfile, mapped to camelCase
+  bio?: string | null; // From UserProfile, mapped to camelCase
+  profilePictureUrl?: string | null; // From UserProfile, mapped to camelCase
+}
+
+
+// Represents the structure in your 'events' table
 export interface Event {
-  id: string;
+  event_id: string; // Primary Key
   title: string;
   description: string;
-  date: string; // ISO string or a more specific date type
+  date: string; // ISO string for date YYYY-MM-DD
   time: string; // e.g., "10:00 AM - 5:00 PM"
   location: string;
   category: string;
-  ticketPriceRange: string; // e.g., "$20 - $50" or "Free"
-  imageUrl: string;
-  organizerId: string;
-  organizerName?: string; // Denormalized for convenience
+  ticket_price_range: string; // e.g., "$20 - $50" or "Free"
+  image_url: string;
+  organizer_id: string; // Foreign Key to users.auth_user_id
+  created_at?: string;
+  updated_at?: string;
+  // For joined data from the 'users' table (organizer's details)
+  // Supabase returns this as a nested object if singular, or array if multiple.
+  // Naming the property 'users' to match Supabase's default join key name.
+  users?: {
+    name: string;
+    organization_name: string | null;
+    // include other organizer fields if needed directly in EventCard
+  } | null; // Allow null if no organizer found or not joined
 }
 
-export interface Organizer {
-  id: string;
-  name: string;
-  profilePictureUrl: string;
-  bio: string;
-  eventsHeld: number;
+// This type was previously for mockData, now aligning with UserProfile for organizers
+// We'll primarily use UserProfile when displaying organizer details.
+export interface Organizer extends UserProfile {
+  eventsHeld?: number; // This would need to be calculated dynamically
 }
+
 
 export interface SavedCard {
-  id: string;
+  id: string; // Corresponds to payment_method_id
   last4: string;
   expiryDate: string; // "MM/YY"
   cardType: string; // "Visa", "Mastercard", etc.
