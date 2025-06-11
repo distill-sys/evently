@@ -8,7 +8,9 @@ import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabaseClient';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Loader2, Users, CalendarDays, BuildingIcon, ArrowLeft, LineChart as LineChartIcon, ServerCrash } from 'lucide-react';
+import { Loader2, Users, CalendarDays, BuildingIcon, ArrowLeft, LineChart as LineChartIcon, ServerCrash, PieChart as PieChartIcon } from 'lucide-react';
+import { PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import type { UserRole } from '@/lib/types';
 
 interface PlatformStats {
   users: number;
@@ -16,10 +18,18 @@ interface PlatformStats {
   venues: number;
 }
 
+interface UserRoleDistribution {
+  role: UserRole | string; // Can be 'unknown' if role is null
+  count: number;
+}
+
+const COLORS = ['#4285F4', '#00A2E8', '#34A853', '#FBBC05', '#EA4335']; // Primary, Accent, Green, Yellow, Red
+
 export default function AdminAnalyticsPage() {
   const { user: authUser, role, isLoading: authLoading } = useAuth();
   const router = useRouter();
   const [stats, setStats] = useState<PlatformStats | null>(null);
+  const [userRoleData, setUserRoleData] = useState<UserRoleDistribution[]>([]);
   const [isLoadingData, setIsLoadingData] = useState(true);
   const [fetchError, setFetchError] = useState<string | null>(null);
 
@@ -30,29 +40,37 @@ export default function AdminAnalyticsPage() {
   }, [authUser, role, authLoading, router]);
 
   useEffect(() => {
-    const fetchStats = async () => {
+    const fetchAllAnalyticsData = async () => {
       if (role === 'admin') {
         setIsLoadingData(true);
         setFetchError(null);
         try {
-          const [usersCount, eventsCount, venuesCount] = await Promise.all([
+          const [usersCountRes, eventsCountRes, venuesCountRes, userRolesRes] = await Promise.all([
             supabase.from('users').select('*', { count: 'exact', head: true }),
             supabase.from('events').select('*', { count: 'exact', head: true }),
             supabase.from('venues').select('*', { count: 'exact', head: true }),
+            supabase.from('users').select('role, count:id.count').groupedBy('role')
           ]);
 
-          if (usersCount.error) throw usersCount.error;
-          if (eventsCount.error) throw eventsCount.error;
-          if (venuesCount.error) throw venuesCount.error;
+          if (usersCountRes.error) throw usersCountRes.error;
+          if (eventsCountRes.error) throw eventsCountRes.error;
+          if (venuesCountRes.error) throw venuesCountRes.error;
+          if (userRolesRes.error) throw userRolesRes.error;
           
           setStats({
-            users: usersCount.count || 0,
-            events: eventsCount.count || 0,
-            venues: venuesCount.count || 0,
+            users: usersCountRes.count || 0,
+            events: eventsCountRes.count || 0,
+            venues: venuesCountRes.count || 0,
           });
+          
+          const formattedRolesData = (userRolesRes.data || []).map(item => ({
+            role: item.role || 'Unknown',
+            count: item.count || 0,
+          }));
+          setUserRoleData(formattedRolesData as UserRoleDistribution[]);
 
         } catch (error: any) {
-          console.error('Error fetching platform stats:', error);
+          console.error('Error fetching platform analytics:', error);
           setFetchError('Could not fetch platform statistics. ' + (error?.message || ''));
         } finally {
           setIsLoadingData(false);
@@ -61,7 +79,7 @@ export default function AdminAnalyticsPage() {
     };
 
     if (!authLoading && authUser && role === 'admin') {
-      fetchStats();
+      fetchAllAnalyticsData();
     }
   }, [authLoading, authUser, role]);
 
@@ -108,38 +126,87 @@ export default function AdminAnalyticsPage() {
           </CardContent>
         </Card>
       ) : stats ? (
-        <div className="grid md:grid-cols-3 gap-6">
-          <Card className="hover:shadow-lg transition-shadow">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium font-headline">Total Users</CardTitle>
-              <Users className="h-5 w-5 text-primary" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-3xl font-bold font-headline">{stats.users}</div>
-              <p className="text-xs text-muted-foreground font-body">Registered users on the platform.</p>
-            </CardContent>
-          </Card>
-          <Card className="hover:shadow-lg transition-shadow">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium font-headline">Total Events</CardTitle>
-              <CalendarDays className="h-5 w-5 text-primary" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-3xl font-bold font-headline">{stats.events}</div>
-              <p className="text-xs text-muted-foreground font-body">Events created and listed.</p>
-            </CardContent>
-          </Card>
-          <Card className="hover:shadow-lg transition-shadow">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium font-headline">Total Venues</CardTitle>
-              <BuildingIcon className="h-5 w-5 text-primary" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-3xl font-bold font-headline">{stats.venues}</div>
-              <p className="text-xs text-muted-foreground font-body">Venues available in the system.</p>
-            </CardContent>
-          </Card>
-        </div>
+        <>
+          <div className="grid md:grid-cols-3 gap-6">
+            <Card className="hover:shadow-lg transition-shadow">
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium font-headline">Total Users</CardTitle>
+                <Users className="h-5 w-5 text-primary" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-3xl font-bold font-headline">{stats.users}</div>
+                <p className="text-xs text-muted-foreground font-body">Registered users on the platform.</p>
+              </CardContent>
+            </Card>
+            <Card className="hover:shadow-lg transition-shadow">
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium font-headline">Total Events</CardTitle>
+                <CalendarDays className="h-5 w-5 text-primary" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-3xl font-bold font-headline">{stats.events}</div>
+                <p className="text-xs text-muted-foreground font-body">Events created and listed.</p>
+              </CardContent>
+            </Card>
+            <Card className="hover:shadow-lg transition-shadow">
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium font-headline">Total Venues</CardTitle>
+                <BuildingIcon className="h-5 w-5 text-primary" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-3xl font-bold font-headline">{stats.venues}</div>
+                <p className="text-xs text-muted-foreground font-body">Venues available in the system.</p>
+              </CardContent>
+            </Card>
+          </div>
+
+          {userRoleData.length > 0 && (
+            <Card className="hover:shadow-lg transition-shadow">
+              <CardHeader>
+                <CardTitle className="font-headline text-xl flex items-center">
+                  <PieChartIcon className="mr-2 h-5 w-5 text-primary" />
+                  User Role Distribution
+                </CardTitle>
+                <CardDescription className="font-body">Breakdown of users by their assigned roles.</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div style={{ width: '100%', height: 300 }}>
+                  <ResponsiveContainer>
+                    <PieChart>
+                      <Pie
+                        data={userRoleData}
+                        cx="50%"
+                        cy="50%"
+                        labelLine={false}
+                        label={({ cx, cy, midAngle, innerRadius, outerRadius, percent, index, role }) => {
+                          const RADIAN = Math.PI / 180;
+                          const radius = innerRadius + (outerRadius - innerRadius) * 0.5;
+                          const x = cx + radius * Math.cos(-midAngle * RADIAN);
+                          const y = cy + radius * Math.sin(-midAngle * RADIAN);
+                          return (
+                            <text x={x} y={y} fill="white" textAnchor={x > cx ? 'start' : 'end'} dominantBaseline="central" className="text-xs font-body">
+                              {`${userRoleData[index].role} (${(percent * 100).toFixed(0)}%)`}
+                            </text>
+                          );
+                        }}
+                        outerRadius={110}
+                        fill="#8884d8"
+                        dataKey="count"
+                        nameKey="role"
+                      >
+                        {userRoleData.map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                        ))}
+                      </Pie>
+                      <Tooltip formatter={(value, name) => [`${value} users`, name as string]} />
+                      <Legend />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+        </>
       ) : (
          <p className="font-body text-muted-foreground">No statistics to display.</p>
       )}
