@@ -29,23 +29,48 @@ export default function AdminVenueApprovalsPage() {
 
     setIsLoadingData(true);
     setFetchError(null);
-    const { data, error } = await supabase
-      .from('events')
-      .select(`
+    const selectQuery = `
         event_id,
         title,
         date,
         venue_booking_status,
         organizer:users ( name ),
         venue:venues ( name )
-      `)
-      .is('venue_id', true) // Ensure venue_id is not null
+      `;
+    const { data, error } = await supabase
+      .from('events')
+      .select(selectQuery)
+      .not('venue_id', 'is', null) // Ensure venue_id is not null more explicitly
       .eq('venue_booking_status', 'pending')
       .order('date', { ascending: true });
 
     if (error) {
-      console.error('Error fetching pending venue approvals:', error);
-      setFetchError('Could not fetch pending venue approvals. Please try again later.');
+      // Enhanced error logging
+      let descriptiveError = 'Could not fetch pending venue approvals. Please try again later.';
+      if (error && typeof error === 'object') {
+        if (error.message) {
+          descriptiveError = `Error fetching approvals: ${error.message}`;
+          console.error(
+            `Error fetching pending venue approvals - Message: ${error.message}, Code: ${error.code}, Details: ${error.details}, Hint: ${error.hint}`
+          );
+        } else if (Object.keys(error).length === 0) {
+          descriptiveError = 'An empty error object was received while fetching venue approvals. This often indicates an RLS issue or a silent failure in a Supabase query. Please check your Supabase logs and RLS policies for the "events", "users", and "venues" tables.';
+          console.error(descriptiveError);
+        } else {
+           try {
+             const errorString = JSON.stringify(error, null, 2);
+             descriptiveError = `Received a non-standard error object while fetching approvals: ${errorString}`;
+             console.error('Non-standard error object details:', errorString);
+           } catch (e) {
+             descriptiveError = 'Received a non-standard error object that could not be stringified while fetching approvals. Check the raw error object logged above.';
+             console.error('Non-standard error object (unstringifiable):', error);
+           }
+        }
+      } else if (error) {
+        descriptiveError = `Received an error: ${String(error)}`;
+        console.error('Error fetching pending venue approvals (non-object):', error);
+      }
+      setFetchError(descriptiveError);
       setPendingEvents([]);
     } else {
       setPendingEvents(data as EventType[] || []);
@@ -206,3 +231,4 @@ export default function AdminVenueApprovalsPage() {
     </div>
   );
 }
+
