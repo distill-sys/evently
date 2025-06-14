@@ -42,30 +42,24 @@ export interface Event {
   venue_id?: string | null; // Optional Foreign Key to venues.venue_id
   created_at?: string;
   updated_at?: string;
-  // For joined data from the 'users' table (organizer's details)
-  // Property name 'organizer' now matches the alias in the Supabase query.
   organizer?: {
-    auth_user_id: string; // Ensure organizer_id is available if needed
+    auth_user_id: string; 
     name: string;
     organization_name: string | null;
-    // include other organizer fields if needed directly in EventCard
-  } | UserProfile | null; // Allow null if no organizer found or not joined
-  // Optionally, you could also join venue details here if needed frequently
+  } | UserProfile | null; 
   venue?: Pick<Venue, 'name' | 'address' | 'city' | 'state_province' | 'country'> | null;
 }
 
-// This type was previously for mockData, now aligning with UserProfile for organizers
-// We'll primarily use UserProfile when displaying organizer details.
 export interface Organizer extends UserProfile {
-  eventsHeld?: number; // This would need to be calculated dynamically
+  eventsHeld?: number; 
 }
 
 
 export interface SavedCard {
-  id: string; // Corresponds to payment_method_id
+  id: string; 
   last4: string;
   expiryDate: string; // "MM/YY"
-  cardType: string; // "Visa", "Mastercard", etc.
+  cardType: string; 
 }
 
 // Represents the structure in your 'venues' table
@@ -85,20 +79,30 @@ export interface Venue {
   created_by: string; // UUID of admin user who created it
   created_at?: string;
   updated_at?: string;
-  // Optional: include creator's name if joining with users table
   creator?: {
     name: string;
   } | null;
 }
 
 export interface TicketPurchase {
-  purchase_id: string; // Unique ID for the purchase
+  purchase_id: string;
   event_id: string;
   attendee_user_id: string;
   organizer_user_id: string;
   quantity: number;
   purchase_date: string; // ISO string
-  // total_price?: number; // If you calculate a price
-  payment_method_id?: string; // Mock payment method ID
+  payment_method_id?: string;
   status?: 'confirmed' | 'pending' | 'cancelled';
+  updated_at?: string; // For tracking cancellation time
+
+  // Joined event details - Supabase returns joined table as a nested object
+  events?: { // Property name 'events' matches the table name
+    event_id: string;
+    title: string;
+    date: string;
+    time: string;
+    image_url: string | null;
+    location: string;
+    ticket_price_range: string;
+  } | null;
 }

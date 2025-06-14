@@ -2,10 +2,10 @@
 'use client';
 
 import Link from 'next/link';
-import { Button, buttonVariants } from '@/components/ui/button'; // Import buttonVariants
+import { Button, buttonVariants } from '@/components/ui/button'; 
 import { useAuth } from '@/contexts/AuthContext';
-import { Ticket, LogIn, UserPlus, LogOut, UserCircle2, Settings, Briefcase } from 'lucide-react';
-import type { VariantProps } from 'class-variance-authority'; // For buttonVariants types
+import { Ticket, LogIn, UserPlus, LogOut, UserCircle2, Settings, Briefcase, ListOrdered } from 'lucide-react';
+import type { VariantProps } from 'class-variance-authority'; 
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -16,7 +16,6 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { cn } from '@/lib/utils';
 
-// Helper to get className from buttonVariants
 const getButtonClasses = (props: VariantProps<typeof buttonVariants>) => cn(buttonVariants(props));
 
 
@@ -30,7 +29,7 @@ export default function Header() {
           <Ticket className="h-8 w-8 text-primary" />
           <span className="text-2xl font-headline font-semibold text-primary">Evently</span>
         </Link>
-        <nav className="flex items-center gap-2 md:gap-4"> {/* Added md:gap-4 for better spacing on larger screens */}
+        <nav className="flex items-center gap-2 md:gap-4">
           {user ? (
             <>
               {role === 'attendee' && (
@@ -56,9 +55,14 @@ export default function Header() {
                   <DropdownMenuLabel className="font-body">My Account ({user.name})</DropdownMenuLabel>
                   <DropdownMenuSeparator />
                   {role === 'attendee' && (
-                    <DropdownMenuItem asChild className="font-body cursor-pointer">
-                      <Link href="/attendee/profile"><Settings className="mr-2 h-4 w-4" />Profile & Cards</Link>
-                    </DropdownMenuItem>
+                    <>
+                      <DropdownMenuItem asChild className="font-body cursor-pointer">
+                        <Link href="/attendee/profile"><Settings className="mr-2 h-4 w-4" />Profile & Cards</Link>
+                      </DropdownMenuItem>
+                      <DropdownMenuItem asChild className="font-body cursor-pointer">
+                        <Link href="/attendee/tickets"><ListOrdered className="mr-2 h-4 w-4" />My Tickets</Link>
+                      </DropdownMenuItem>
+                    </>
                   )}
                   {role === 'organizer' && (
                      <DropdownMenuItem asChild className="font-body cursor-pointer">
