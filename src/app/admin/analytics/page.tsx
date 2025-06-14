@@ -20,7 +20,7 @@ interface PlatformStats {
 }
 
 interface UserRoleDistribution {
-  role: UserRole | string;
+  role: string; // Changed from UserRole | string to just string
   count: number;
 }
 
@@ -251,3 +251,4 @@ export default function AdminAnalyticsPage() {
     </div>
   );
 }
+
