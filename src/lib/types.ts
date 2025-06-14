@@ -45,10 +45,11 @@ export interface Event {
   // For joined data from the 'users' table (organizer's details)
   // Property name 'organizer' now matches the alias in the Supabase query.
   organizer?: {
+    auth_user_id: string; // Ensure organizer_id is available if needed
     name: string;
     organization_name: string | null;
     // include other organizer fields if needed directly in EventCard
-  } | null; // Allow null if no organizer found or not joined
+  } | UserProfile | null; // Allow null if no organizer found or not joined
   // Optionally, you could also join venue details here if needed frequently
   venue?: Pick<Venue, 'name' | 'address' | 'city' | 'state_province' | 'country'> | null;
 }
@@ -88,4 +89,16 @@ export interface Venue {
   creator?: {
     name: string;
   } | null;
+}
+
+export interface TicketPurchase {
+  purchase_id: string; // Unique ID for the purchase
+  event_id: string;
+  attendee_user_id: string;
+  organizer_user_id: string;
+  quantity: number;
+  purchase_date: string; // ISO string
+  // total_price?: number; // If you calculate a price
+  payment_method_id?: string; // Mock payment method ID
+  status?: 'confirmed' | 'pending' | 'cancelled';
 }

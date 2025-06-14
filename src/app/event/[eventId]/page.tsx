@@ -1,7 +1,7 @@
 
 'use client'; 
 
-import type { Event as EventType, Organizer as OrganizerType, Venue, UserProfile } from '@/lib/types';
+import type { Event as EventType, Organizer as OrganizerType, UserProfile, TicketPurchase } from '@/lib/types';
 import Image from 'next/image';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
@@ -57,20 +57,21 @@ export default function EventPage() {
         setIsLoading(false);
         setFetchError("No event ID provided.");
     }
-  }, [eventId]);
+  }, [eventId, fetchError]);
 
 
-  const handlePurchaseSuccess = (details: { eventTitle: string; ticketQuantity: number }) => {
+  const handlePurchaseSuccess = (details: { eventTitle: string; ticketQuantity: number; purchaseRecord: TicketPurchase }) => {
     toast({
       title: "Purchase Successful!",
       description: (
         <div className="font-body">
           <p>You've purchased {details.ticketQuantity} ticket(s) for "{details.eventTitle}".</p>
           <p className="mt-1 text-xs">Your e-tickets will be sent to your email.</p>
+          <p className="mt-1 text-xs">Purchase ID (mock): {details.purchaseRecord.purchase_id}</p>
         </div>
       ),
       variant: "default",
-      duration: 5000,
+      duration: 7000, // Increased duration to see purchase ID
     });
   };
 
@@ -109,12 +110,10 @@ export default function EventPage() {
     day: 'numeric',
   }) : 'Date not available';
 
-  const displayOrganizer: OrganizerType | undefined = event.organizer ? {
-    ...(event.organizer as UserProfile), 
-    id: (event.organizer as UserProfile).auth_user_id, 
-    profilePictureUrl: (event.organizer as UserProfile).profile_picture_url || 'https://placehold.co/120x120.png',
-    eventsHeld: 0, 
-  } : undefined;
+  // Ensure organizer object has id for link, even if it's from UserProfile type
+  const organizerForDisplay = event.organizer as (UserProfile & { id?: string });
+  const organizerIdForLink = organizerForDisplay?.auth_user_id || (organizerForDisplay as any)?.id;
+
 
   return (
     <div className="max-w-4xl mx-auto py-8 space-y-8">
@@ -172,7 +171,7 @@ export default function EventPage() {
               </CardContent>
             </Card>
             
-            {displayOrganizer && (
+            {organizerForDisplay && organizerIdForLink && (
               <Card className="bg-secondary/30">
                 <CardHeader>
                   <CardTitle className="font-headline text-xl flex items-center">
@@ -181,22 +180,22 @@ export default function EventPage() {
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <Link href={`/organizer/${displayOrganizer.id}`} className="block group">
+                  <Link href={`/organizer/${organizerIdForLink}`} className="block group">
                     <div className="flex items-center gap-3">
                         <Image 
-                            src={displayOrganizer.profilePictureUrl || 'https://placehold.co/48x48.png'} 
-                            alt={displayOrganizer.name} 
+                            src={organizerForDisplay.profile_picture_url || 'https://placehold.co/48x48.png'} 
+                            alt={organizerForDisplay.name} 
                             width={48} height={48} 
                             className="rounded-full" 
                             data-ai-hint="person avatar"
                         />
                         <div>
                             <p className="font-body text-lg font-semibold group-hover:text-primary transition-colors">
-                                {displayOrganizer.name}
+                                {organizerForDisplay.name}
                             </p>
-                            {(displayOrganizer as UserProfile).organization_name && (
+                            {organizerForDisplay.organization_name && (
                                 <p className="font-body text-xs text-muted-foreground">
-                                    {(displayOrganizer as UserProfile).organization_name}
+                                    {organizerForDisplay.organization_name}
                                 </p>
                             )}
                             <p className="font-body text-sm text-muted-foreground group-hover:text-primary transition-colors">View Profile &rarr;</p>
@@ -234,5 +233,3 @@ export default function EventPage() {
     </div>
   );
 }
-
-    

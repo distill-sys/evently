@@ -10,9 +10,9 @@ import { Button } from '@/components/ui/button';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { useToast } from '@/hooks/use-toast';
+// import { useToast } from '@/hooks/use-toast'; // No longer directly used here for success, parent handles it.
 import { useAuth } from '@/contexts/AuthContext';
-import type { Event as EventType, SavedCard } from '@/lib/types';
+import type { Event as EventType, SavedCard, TicketPurchase } from '@/lib/types';
 import { Loader2, CreditCard, Ticket } from 'lucide-react';
 
 const MOCK_SAVED_CARDS_KEY = 'evently_mock_saved_cards';
@@ -30,12 +30,12 @@ interface TicketPurchaseDialogProps {
   event: EventType | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onPurchaseSuccess: (details: { eventTitle: string; ticketQuantity: number }) => void;
+  onPurchaseSuccess: (details: { eventTitle: string; ticketQuantity: number, purchaseRecord: TicketPurchase }) => void;
 }
 
 export default function TicketPurchaseDialog({ event, open, onOpenChange, onPurchaseSuccess }: TicketPurchaseDialogProps) {
   const { user } = useAuth();
-  const { toast } = useToast();
+  // const { toast } = useToast(); // Removed as success toast is handled by parent page
   const [isProcessing, setIsProcessing] = useState(false);
   const [savedCards, setSavedCards] = useState<SavedCard[]>([]);
 
@@ -87,7 +87,29 @@ export default function TicketPurchaseDialog({ event, open, onOpenChange, onPurc
     await new Promise(resolve => setTimeout(resolve, 1500));
     setIsProcessing(false);
 
-    onPurchaseSuccess({ eventTitle: event.title, ticketQuantity: data.ticketQuantity });
+    if (!user) {
+        // This case should ideally be handled by disabling the form or button if no user
+        console.error("Purchase attempted without a logged-in user.");
+        // Optionally show a toast error here, though the form should prevent submission
+        return;
+    }
+    
+    const purchaseRecord: TicketPurchase = {
+        purchase_id: `purchase_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
+        event_id: event.event_id,
+        attendee_user_id: user.id,
+        organizer_user_id: event.organizer_id, // Assuming event object has organizer_id
+        quantity: data.ticketQuantity,
+        purchase_date: new Date().toISOString(),
+        payment_method_id: data.paymentMethodId,
+        status: 'confirmed'
+    };
+
+    console.log("Simulating saving ticket purchase to backend:", purchaseRecord);
+    // In a real app, you would now send this purchaseRecord to your backend/Supabase.
+    // e.g., await supabase.from('ticket_purchases').insert([purchaseRecord]);
+
+    onPurchaseSuccess({ eventTitle: event.title, ticketQuantity: data.ticketQuantity, purchaseRecord });
     form.reset();
     onOpenChange(false); // Close dialog
   };
@@ -156,7 +178,7 @@ export default function TicketPurchaseDialog({ event, open, onOpenChange, onPurc
               render={({ field }) => (
                 <FormItem>
                   <FormLabel className="font-headline">Payment Method</FormLabel>
-                  <Select onValueChange={field.onChange} defaultValue={field.value}>
+                  <Select onValueChange={field.onChange} defaultValue={field.value} disabled={!user}>
                     <FormControl>
                       <SelectTrigger className="font-body">
                          <CreditCard className="mr-2 h-4 w-4 text-muted-foreground" />
@@ -172,12 +194,12 @@ export default function TicketPurchaseDialog({ event, open, onOpenChange, onPurc
                         ))
                       ) : (
                         <div className="p-4 text-center text-sm text-muted-foreground font-body">
-                          No saved cards. Please add a card in your profile.
+                          {user ? "No saved cards. Please add a card in your profile." : "Log in to use saved cards."}
                         </div>
                       )}
                     </SelectContent>
                   </Select>
-                  {savedCards.length === 0 && (
+                  {user && savedCards.length === 0 && (
                      <p className="text-xs text-muted-foreground mt-1 font-body">
                         Go to your <a href="/attendee/profile" className="underline text-primary">profile</a> to add a payment method.
                     </p>
@@ -187,7 +209,7 @@ export default function TicketPurchaseDialog({ event, open, onOpenChange, onPurc
               )}
             />
             <DialogFooter className="sm:justify-start">
-              <Button type="submit" disabled={isProcessing || (savedCards.length === 0 && !user)} className="w-full sm:w-auto font-body">
+              <Button type="submit" disabled={isProcessing || !user || (user && savedCards.length === 0)} className="w-full sm:w-auto font-body">
                 {isProcessing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
                 Confirm Purchase
               </Button>
