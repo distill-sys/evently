@@ -120,7 +120,7 @@ export default async function EventPage({ params }: EventPageProps) {
               </CardHeader>
               <CardContent>
                 <p className="font-body text-lg">{event.ticket_price_range}</p>
-                <Button className="w-full mt-4 font-body" size="lg">Get Tickets (Mock)</Button>
+                <Button className="w-full mt-4 font-body" size="lg">Purchase Tickets (Mock)</Button>
               </CardContent>
             </Card>
             

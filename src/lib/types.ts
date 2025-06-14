@@ -50,7 +50,7 @@ export interface Event {
     // include other organizer fields if needed directly in EventCard
   } | null; // Allow null if no organizer found or not joined
   // Optionally, you could also join venue details here if needed frequently
-  venue?: Pick<Venue, 'name' | 'address' | 'city'> | null;
+  venue?: Pick<Venue, 'name' | 'address' | 'city' | 'state_province' | 'country'> | null;
 }
 
 // This type was previously for mockData, now aligning with UserProfile for organizers
@@ -89,4 +89,3 @@ export interface Venue {
     name: string;
   } | null;
 }
-```
