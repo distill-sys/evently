@@ -44,10 +44,9 @@ type CombinedSchemaType = z.infer<typeof attendeeSchema> | z.infer<typeof organi
 
 export default function SignUpPage() {
   const [selectedRole, setSelectedRole] = useState<UserRole>('attendee');
-  const { signUp, isLoading: authLoading, user, role: authRole } = useAuth(); // Added authRole
+  const { signUp, isLoading: authLoading, user, role: authRole } = useAuth();
   const [showPassword, setShowPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isAttemptingRedirect, setIsAttemptingRedirect] = useState(false);
   const router = useRouter();
 
   const currentSchema = selectedRole === 'organizer' ? organizerSchema : (selectedRole === 'admin' ? adminSchema : attendeeSchema);
@@ -70,8 +69,8 @@ export default function SignUpPage() {
   }, [selectedRole, form]);
 
   useEffect(() => {
-    if (!authLoading && user && !isAttemptingRedirect) {
-      setIsAttemptingRedirect(true);
+    // Redirect if user is logged in and auth is not loading
+    if (!authLoading && user) {
       if (authRole) { // Role is known from AuthContext
         switch (authRole) {
           case 'attendee':
@@ -88,16 +87,15 @@ export default function SignUpPage() {
             break;
         }
       } else {
-        // This case should ideally not be hit often after signup as role is set.
-        // But if role somehow isn't immediately available, go to dashboard.
+        // If role is not yet determined but user exists, go to dashboard for role selection
         router.push('/dashboard');
       }
     }
-  }, [authLoading, user, authRole, router, isAttemptingRedirect]); // Added authRole to dependencies
+  }, [authLoading, user, authRole, router]);
 
   async function onSubmit(values: CombinedSchemaType) {
     setIsSubmitting(true);
-    const { password, role: formRole, ...userData } = values; // Renamed role to formRole to avoid conflict
+    const { password, role: formRole, ...userData } = values;
 
     const userDetailsForSignUp = {
         name: userData.name,
@@ -124,14 +122,18 @@ export default function SignUpPage() {
     });
   };
 
-  const currentLoading = authLoading || isSubmitting;
+  const pageLoading = authLoading || isSubmitting;
 
-  // Show loading spinner if redirecting or initial auth check is in progress
-  if (authLoading || (!authLoading && user && isAttemptingRedirect)) {
+  // If authLoading is true, AuthContext shows a global loader.
+  // This page shows a spinner mainly during form submission or if
+  // the user is already logged in and waiting for the useEffect to redirect.
+  if (isSubmitting || (!authLoading && user)) {
      return (
       <div className="flex flex-col items-center justify-center min-h-[calc(100vh-10rem)]">
         <Loader2 className="h-12 w-12 animate-spin text-primary mb-4" />
-        <p className="text-xl font-body text-muted-foreground">Redirecting...</p>
+        <p className="text-xl font-body text-muted-foreground">
+          {isSubmitting ? 'Creating account...' : 'Redirecting...'}
+        </p>
       </div>
     );
   }
@@ -157,7 +159,7 @@ export default function SignUpPage() {
                     onValueChange={handleRoleChange}
                     defaultValue={field.value}
                     className="grid grid-cols-1 md:grid-cols-3 gap-4"
-                    aria-disabled={currentLoading}
+                    aria-disabled={pageLoading}
                   >
                     {[
                       { value: 'attendee' as UserRole, label: 'Attendee', icon: <UserCircle2 className="mr-2 h-5 w-5" /> },
@@ -166,11 +168,11 @@ export default function SignUpPage() {
                     ].map((roleOption) => (
                       <FormItem key={roleOption.value} className="flex-1">
                         <FormControl>
-                           <RadioGroupItem value={roleOption.value} id={roleOption.value} className="sr-only peer" disabled={currentLoading}/>
+                           <RadioGroupItem value={roleOption.value} id={roleOption.value} className="sr-only peer" disabled={pageLoading}/>
                         </FormControl>
                         <FormLabel
                           htmlFor={roleOption.value}
-                          className={`flex flex-col items-center justify-between rounded-md border-2 border-muted bg-popover p-4 hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-primary [&:has([data-state=checked])]:border-primary ${currentLoading ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'}`}
+                          className={`flex flex-col items-center justify-between rounded-md border-2 border-muted bg-popover p-4 hover:bg-accent hover:text-accent-foreground peer-data-[state=checked]:border-primary [&:has([data-state=checked])]:border-primary ${pageLoading ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'}`}
                         >
                           {roleOption.icon}
                           <span className="font-body">{roleOption.label}</span>
@@ -191,7 +193,7 @@ export default function SignUpPage() {
               <FormItem>
                 <FormLabel className="font-headline">Full Name</FormLabel>
                 <FormControl>
-                  <Input placeholder="John Doe" {...field} className="font-body" disabled={currentLoading}/>
+                  <Input placeholder="John Doe" {...field} className="font-body" disabled={pageLoading}/>
                 </FormControl>
                 <FormMessage />
               </FormItem>
@@ -204,7 +206,7 @@ export default function SignUpPage() {
               <FormItem>
                 <FormLabel className="font-headline">Email Address</FormLabel>
                 <FormControl>
-                  <Input type="email" placeholder="you@example.com" {...field} className="font-body" disabled={currentLoading}/>
+                  <Input type="email" placeholder="you@example.com" {...field} className="font-body" disabled={pageLoading}/>
                 </FormControl>
                 <FormMessage />
               </FormItem>
@@ -218,14 +220,14 @@ export default function SignUpPage() {
                 <FormLabel className="font-headline">Password</FormLabel>
                 <FormControl>
                   <div className="relative">
-                    <Input type={showPassword ? "text" : "password"} placeholder="••••••••" {...field} className="font-body pr-10" disabled={currentLoading}/>
+                    <Input type={showPassword ? "text" : "password"} placeholder="••••••••" {...field} className="font-body pr-10" disabled={pageLoading}/>
                     <Button
                       type="button"
                       variant="ghost"
                       size="icon"
                       className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7 text-muted-foreground hover:text-foreground"
                       onClick={() => setShowPassword(!showPassword)}
-                      disabled={currentLoading}
+                      disabled={pageLoading}
                     >
                       {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                       <span className="sr-only">{showPassword ? "Hide password" : "Show password"}</span>
@@ -246,7 +248,7 @@ export default function SignUpPage() {
                   <FormItem>
                     <FormLabel className="font-headline">Organization Name</FormLabel>
                     <FormControl>
-                      <Input placeholder="Your Company LLC" {...field} className="font-body" disabled={currentLoading}/>
+                      <Input placeholder="Your Company LLC" {...field} className="font-body" disabled={pageLoading}/>
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -259,7 +261,7 @@ export default function SignUpPage() {
                   <FormItem>
                     <FormLabel className="font-headline">Organizer Bio</FormLabel>
                     <FormControl>
-                      <Textarea placeholder="Tell us about your organization..." {...field} className="font-body" disabled={currentLoading}/>
+                      <Textarea placeholder="Tell us about your organization..." {...field} className="font-body" disabled={pageLoading}/>
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -268,8 +270,8 @@ export default function SignUpPage() {
             </>
           )}
 
-          <Button type="submit" className="w-full font-body" disabled={currentLoading}>
-             {currentLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+          <Button type="submit" className="w-full font-body" disabled={pageLoading}>
+             {pageLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
             Create Account
           </Button>
         </form>

@@ -26,15 +26,14 @@ const loginSchema = z.object({
 });
 
 export default function LoginPage() {
-  const { signIn, isLoading: authLoading, user, role } = useAuth(); // Added role
+  const { signIn, isLoading: authLoading, user, role } = useAuth();
   const [showPassword, setShowPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isAttemptingRedirect, setIsAttemptingRedirect] = useState(false);
   const router = useRouter();
 
   useEffect(() => {
-    if (!authLoading && user && !isAttemptingRedirect) {
-      setIsAttemptingRedirect(true);
+    // Redirect if user is logged in and auth is not loading
+    if (!authLoading && user) {
       if (role) {
         switch (role) {
           case 'attendee':
@@ -51,10 +50,11 @@ export default function LoginPage() {
             break;
         }
       } else {
-        router.push('/dashboard'); // No role, go to dashboard
+        // If role is not yet determined but user exists, go to dashboard for role selection
+        router.push('/dashboard');
       }
     }
-  }, [authLoading, user, role, router, isAttemptingRedirect]); // Added role to dependencies
+  }, [authLoading, user, role, router]);
 
   const form = useForm<z.infer<typeof loginSchema>>({
     resolver: zodResolver(loginSchema),
@@ -71,14 +71,18 @@ export default function LoginPage() {
     // Redirection is handled by AuthContext's onAuthStateChange or the useEffect above
   }
 
-  const currentLoading = authLoading || isSubmitting;
+  const pageLoading = authLoading || isSubmitting;
 
-  // Show loading spinner if redirecting or initial auth check is in progress
-  if (authLoading || (!authLoading && user && isAttemptingRedirect)) {
+  // If authLoading is true, AuthContext shows a global loader.
+  // This page shows a spinner mainly during form submission or if
+  // the user is already logged in and waiting for the useEffect to redirect.
+  if (isSubmitting || (!authLoading && user)) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[calc(100vh-10rem)]">
         <Loader2 className="h-12 w-12 animate-spin text-primary mb-4" />
-        <p className="text-xl font-body text-muted-foreground">Redirecting...</p>
+        <p className="text-xl font-body text-muted-foreground">
+          {isSubmitting ? 'Logging in...' : 'Redirecting...'}
+        </p>
       </div>
     );
   }
@@ -100,7 +104,7 @@ export default function LoginPage() {
               <FormItem>
                 <FormLabel className="font-headline">Email Address</FormLabel>
                 <FormControl>
-                  <Input type="email" placeholder="you@example.com" {...field} className="font-body" disabled={currentLoading} />
+                  <Input type="email" placeholder="you@example.com" {...field} className="font-body" disabled={pageLoading} />
                 </FormControl>
                 <FormMessage />
               </FormItem>
@@ -114,14 +118,14 @@ export default function LoginPage() {
                 <FormLabel className="font-headline">Password</FormLabel>
                 <FormControl>
                   <div className="relative">
-                    <Input type={showPassword ? "text" : "password"} placeholder="••••••••" {...field} className="font-body pr-10" disabled={currentLoading} />
+                    <Input type={showPassword ? "text" : "password"} placeholder="••••••••" {...field} className="font-body pr-10" disabled={pageLoading} />
                      <Button
                       type="button"
                       variant="ghost"
                       size="icon"
                       className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7 text-muted-foreground hover:text-foreground"
                       onClick={() => setShowPassword(!showPassword)}
-                      disabled={currentLoading}
+                      disabled={pageLoading}
                     >
                       {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                       <span className="sr-only">{showPassword ? "Hide password" : "Show password"}</span>
@@ -139,8 +143,8 @@ export default function LoginPage() {
               </Link>
             </Button>
           </div>
-          <Button type="submit" className="w-full font-body" disabled={currentLoading}>
-            {currentLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+          <Button type="submit" className="w-full font-body" disabled={pageLoading}>
+            {pageLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
             Log In
           </Button>
         </form>
