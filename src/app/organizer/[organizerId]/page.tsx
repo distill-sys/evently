@@ -33,28 +33,23 @@ async function getOrganizerDetails(organizerId: string): Promise<UserProfile | n
 // Helper function to fetch events by organizer
 async function getOrganizerEvents(organizerId: string): Promise<EventType[]> {
   console.log(`OrganizerPage: getOrganizerEvents - Fetching events for organizer ID: ${organizerId}`);
+  const selectQuery =
+    'event_id, ' +
+    'title, ' +
+    'description, ' +
+    'date, ' +
+    'time, ' +
+    'location, ' +
+    'category, ' +
+    'ticket_price_range, ' +
+    'image_url, ' +
+    'organizer_id, ' +
+    'organizer:users (name, organization_name), ' +
+    'venue:venues (name, city)';
+
   const { data, error } = await supabase
     .from('events')
-    .select(\`
-      event_id,
-      title,
-      description,
-      date,
-      time,
-      location,
-      category,
-      ticket_price_range,
-      image_url,
-      organizer_id,
-      organizer:users ( 
-        name,
-        organization_name
-      ),
-      venue:venues (
-        name,
-        city
-      )
-    \`)
+    .select(selectQuery)
     .eq('organizer_id', organizerId)
     .order('date', { ascending: true });
 
@@ -62,7 +57,7 @@ async function getOrganizerEvents(organizerId: string): Promise<EventType[]> {
     console.error('OrganizerPage: getOrganizerEvents - Error fetching organizer events:', JSON.stringify(error, null, 2));
     return []; 
   }
-  console.log(\`OrganizerPage: getOrganizerEvents - Events for \${organizerId} count:\`, data?.length);
+  console.log(`OrganizerPage: getOrganizerEvents - Events for ${organizerId} count:`, data?.length);
   return (data as EventType[] || []);
 }
 
@@ -80,10 +75,10 @@ export default function OrganizerPage() {
 
   useEffect(() => {
     const effectId = Date.now(); 
-    console.log(\`OrganizerPage[\${effectId}]: useEffect triggered. organizerId: \${organizerId}, authLoading: \${authLoading}, current isLoadingPageData: \${isLoadingPageData}\`);
+    console.log(`OrganizerPage[${effectId}]: useEffect triggered. organizerId: ${organizerId}, authLoading: ${authLoading}, current isLoadingPageData: ${isLoadingPageData}`);
 
     if (!organizerId) {
-      console.log(\`OrganizerPage[\${effectId}]: No organizerId provided. Aborting fetch.\`);
+      console.log(`OrganizerPage[${effectId}]: No organizerId provided. Aborting fetch.`);
       setIsLoadingPageData(false);
       setOrganizer(null);
       setOrganizerEvents([]);
@@ -92,39 +87,39 @@ export default function OrganizerPage() {
     }
 
     if (authLoading) {
-        console.log(\`OrganizerPage[\${effectId}]: Auth is still loading. Waiting for auth to complete before fetching page data.\`);
+        console.log(`OrganizerPage[${effectId}]: Auth is still loading. Waiting for auth to complete before fetching page data.`);
         return;
     }
     
-    console.log(\`OrganizerPage[\${effectId}]: Auth loaded. Proceeding to fetch data for organizerId: \${organizerId}\`);
+    console.log(`OrganizerPage[${effectId}]: Auth loaded. Proceeding to fetch data for organizerId: ${organizerId}`);
 
     async function fetchDataForOrganizer() {
-      console.log(\`OrganizerPage[\${effectId}]: fetchDataForOrganizer called.\`);
+      console.log(`OrganizerPage[${effectId}]: fetchDataForOrganizer called.`);
       setIsLoadingPageData(true); 
       setFetchError(null);
       setOrganizer(null); 
       setOrganizerEvents([]);
 
       try {
-        console.log(\`OrganizerPage[\${effectId}]: Calling Promise.all for getOrganizerDetails and getOrganizerEvents.\`);
+        console.log(`OrganizerPage[${effectId}]: Calling Promise.all for getOrganizerDetails and getOrganizerEvents.`);
         const [details, events] = await Promise.all([
           getOrganizerDetails(organizerId),
           getOrganizerEvents(organizerId)
         ]);
-        console.log(\`OrganizerPage[\${effectId}]: Promise.all resolved. Details found: \${!!details}, Events count: \${events?.length}\`);
+        console.log(`OrganizerPage[${effectId}]: Promise.all resolved. Details found: ${!!details}, Events count: ${events?.length}`);
 
         if (!details) {
-          console.warn(\`OrganizerPage[\${effectId}]: Organizer details not found or user is not an organizer for ID: \${organizerId}.\`);
+          console.warn(`OrganizerPage[${effectId}]: Organizer details not found or user is not an organizer for ID: ${organizerId}.`);
           setFetchError("Organizer profile not found, or this user account is not configured as an organizer.");
         } else {
           setOrganizer(details);
           setOrganizerEvents(events || []); 
         }
       } catch (error: any) {
-        console.error(\`OrganizerPage[\${effectId}]: Error in fetchDataForOrganizer's try block:\`, error);
-        setFetchError(\`Failed to load organizer data: \${error.message || 'An unknown error occurred'}\`);
+        console.error(`OrganizerPage[${effectId}]: Error in fetchDataForOrganizer's try block:`, error);
+        setFetchError(`Failed to load organizer data: ${error.message || 'An unknown error occurred'}`);
       } finally {
-        console.log(\`OrganizerPage[\${effectId}]: fetchDataForOrganizer finally block reached. Setting isLoadingPageData to false.\`);
+        console.log(`OrganizerPage[${effectId}]: fetchDataForOrganizer finally block reached. Setting isLoadingPageData to false.`);
         setIsLoadingPageData(false);
       }
     }
@@ -134,7 +129,7 @@ export default function OrganizerPage() {
   }, [organizerId, authLoading]); 
 
   const isViewingOwnProfile = authUser && authUser.id === organizerId && authRole === 'organizer';
-  console.log(\`OrganizerPage: Render check. authLoading: \${authLoading}, isLoadingPageData: \${isLoadingPageData}, fetchError: \${fetchError}, organizer: \${!!organizer}, authUser: \${!!authUser}, authRole: \${authRole}, isViewingOwnProfile: \${isViewingOwnProfile}\`);
+  console.log(`OrganizerPage: Render check. authLoading: ${authLoading}, isLoadingPageData: ${isLoadingPageData}, fetchError: ${fetchError}, organizer: ${!!organizer}, authUser: ${!!authUser}, authRole: ${authRole}, isViewingOwnProfile: ${isViewingOwnProfile}`);
 
 
   if (authLoading || isLoadingPageData) {
@@ -148,7 +143,7 @@ export default function OrganizerPage() {
   }
 
   if (fetchError || !organizer) {
-    console.log(\`OrganizerPage: Rendering Error/Not Found message. FetchError: \${fetchError}, Organizer found: \${!!organizer}\`);
+    console.log(`OrganizerPage: Rendering Error/Not Found message. FetchError: ${fetchError}, Organizer found: ${!!organizer}`);
     return (
       <div className="text-center py-16 bg-card rounded-lg shadow-md">
         <Frown className="h-16 w-16 text-destructive mx-auto mb-4" />
