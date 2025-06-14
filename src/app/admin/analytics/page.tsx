@@ -20,7 +20,7 @@ interface PlatformStats {
 }
 
 interface UserRoleDistribution {
-  role: string; // Changed from UserRole | string to just string
+  role: string;
   count: number;
 }
 
@@ -87,8 +87,33 @@ export default function AdminAnalyticsPage() {
           setUserRoleData(formattedRolesData as UserRoleDistribution[]);
 
         } catch (error: any) {
-          console.error('Error fetching platform analytics:', error);
-          setFetchError('Could not fetch platform statistics. ' + (error?.message || ''));
+          // Enhanced error logging for the generic catch block
+          console.error('Error fetching platform analytics. The error object received by the catch block is:', error);
+
+          let descriptiveError = 'An unexpected error occurred while fetching platform statistics.';
+          if (error && typeof error === 'object') {
+            if (error.message) {
+              descriptiveError = `Error: ${error.message}`;
+              console.error(`Specific error details - Message: ${error.message}, Code: ${error.code}, Details: ${error.details}, Hint: ${error.hint}`);
+            } else if (Object.keys(error).length === 0) {
+              descriptiveError = 'An empty error object was received. This often indicates an RLS issue or a silent failure in a Supabase query. Please check your Supabase logs and RLS policies for the tables: users, events, venues, ticket_purchases, and the RPC function get_user_role_distribution.';
+              console.error(descriptiveError); // Log this specific guidance
+            } else {
+               // Try to stringify if it's an object but not empty and has no message
+               try {
+                 const errorString = JSON.stringify(error, null, 2);
+                 descriptiveError = `Received a non-standard error object: ${errorString}`;
+                 console.error('Non-standard error object details:', errorString);
+               } catch (e) {
+                 descriptiveError = 'Received a non-standard error object that could not be stringified. Check the raw error object logged above.';
+                 console.error('Non-standard error object (unstringifiable):', error);
+               }
+            }
+          } else if (error) {
+            descriptiveError = `Received an error: ${String(error)}`;
+            console.error('Error content (non-object):', error);
+          }
+          setFetchError(descriptiveError);
         } finally {
           setIsLoadingData(false);
         }
