@@ -1,58 +1,101 @@
 
+'use client'; 
+
 import type { Event as EventType, Organizer as OrganizerType, Venue, UserProfile } from '@/lib/types';
 import Image from 'next/image';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { CalendarDays, MapPin, Ticket, Users, DollarSign, ArrowLeft, Building } from 'lucide-react';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { CalendarDays, MapPin, Ticket, Users, DollarSign, ArrowLeft, Building, Frown, Loader2 } from 'lucide-react';
 import { supabase } from '@/lib/supabaseClient';
-import { notFound } from 'next/navigation';
+import { useParams } from 'next/navigation'; 
+import { useEffect, useState } from 'react'; 
+import { useToast } from '@/hooks/use-toast';
 
-interface EventPageProps {
-  params: { eventId: string };
-}
+export default function EventPage() {
+  const params = useParams(); 
+  const eventId = params.eventId as string;
+  const [event, setEvent] = useState<EventType | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [fetchError, setFetchError] = useState<string | null>(null); // To store any fetch errors
+  const { toast } = useToast();
 
-async function getEventDetails(eventId: string): Promise<EventType | null> {
-  const { data, error } = await supabase
-    .from('events')
-    .select(`
-      *,
-      organizer:users (
-        auth_user_id,
-        name,
-        email,
-        organization_name,
-        bio,
-        profile_picture_url
-      ),
-      venue:venues (
-        name,
-        address,
-        city,
-        state_province,
-        country
-      )
-    `)
-    .eq('event_id', eventId)
-    .single();
+  useEffect(() => {
+    async function getEventDetails(id: string): Promise<EventType | null> {
+      const { data, error } = await supabase
+        .from('events')
+        .select(`
+          *,
+          organizer:users (
+            auth_user_id,
+            name,
+            email,
+            organization_name,
+            bio,
+            profile_picture_url
+          ),
+          venue:venues (
+            name,
+            address,
+            city,
+            state_province,
+            country
+          )
+        `)
+        .eq('event_id', id)
+        .single();
 
-  if (error) {
-    console.error('Error fetching event details:', error);
-    return null;
+      if (error) {
+        console.error('Error fetching event details:', error);
+        setFetchError(error.message || 'Failed to fetch event details.');
+        return null;
+      }
+      return data as EventType | null;
+    }
+
+    if (eventId) {
+      setIsLoading(true);
+      setFetchError(null); // Reset error before new fetch
+      getEventDetails(eventId).then(data => {
+        setEvent(data);
+        setIsLoading(false);
+        if (!data && !fetchError) { // If no data and no explicit fetch error, set a generic not found error
+            setFetchError("Event not found.");
+        }
+      });
+    } else {
+        setIsLoading(false);
+        setFetchError("No event ID provided.");
+    }
+  }, [eventId, fetchError]); // Added fetchError to dependencies, though it's set inside.
+
+
+  if (isLoading) {
+    return (
+        <div className="flex flex-col items-center justify-center min-h-[calc(100vh-16rem)]">
+            <Loader2 className="h-12 w-12 animate-spin text-primary mb-4" />
+            <p className="text-xl font-body text-muted-foreground">Loading event details...</p>
+        </div>
+    );
   }
-  // The 'organizer' and 'venue' fields from the query will be nested objects.
-  // We need to map them correctly to what EventType expects if direct fields were used.
-  // However, EventType is already set up to handle nested organizer and venue objects.
-  return data as EventType | null;
-}
 
-
-export default async function EventPage({ params }: EventPageProps) {
-  const eventId = params.eventId;
-  const event = await getEventDetails(eventId);
-
-  if (!event) {
-    notFound(); // This will render the nearest not-found.tsx or Next.js default 404 page
+  if (fetchError || !event) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[calc(100vh-16rem)] text-center">
+        <Frown className="h-16 w-16 text-destructive mb-4" />
+        <h1 className="text-3xl font-headline font-semibold text-destructive mb-2">
+          {fetchError && fetchError.includes("Event not found") ? "Event Not Found" : "Error Loading Event"}
+        </h1>
+        <p className="font-body text-muted-foreground mb-6">
+          {fetchError || "Sorry, we couldn't find or load the event you're looking for."}
+        </p>
+        <Button asChild variant="outline">
+          <Link href="/attendee">
+            <ArrowLeft className="mr-2 h-4 w-4" /> Back to All Events
+          </Link>
+        </Button>
+      </div>
+    );
   }
 
   const eventDate = new Date(event.date).toLocaleDateString('en-US', {
@@ -61,14 +104,19 @@ export default async function EventPage({ params }: EventPageProps) {
     day: 'numeric',
   });
 
-  // Adapt UserProfile from event.organizer to OrganizerType for display if needed, or use directly
   const displayOrganizer: OrganizerType | undefined = event.organizer ? {
-    ...(event.organizer as UserProfile), // Cast to UserProfile which is the base
-    id: (event.organizer as UserProfile).auth_user_id, // Map auth_user_id to id
+    ...(event.organizer as UserProfile), 
+    id: (event.organizer as UserProfile).auth_user_id, 
     profilePictureUrl: (event.organizer as UserProfile).profile_picture_url || 'https://placehold.co/120x120.png',
-    eventsHeld: 0, // This would require another query or be part of a more complex type
+    eventsHeld: 0, // This would ideally come from another query or be part of the fetched organizer data
   } : undefined;
 
+  const handlePurchaseClick = () => {
+    toast({
+      title: "Ticket Purchase (Mock)",
+      description: `This is a mock purchase for "${event.title}". No actual transaction will occur.`,
+    });
+  };
 
   return (
     <div className="max-w-4xl mx-auto py-8 space-y-8">
@@ -120,7 +168,7 @@ export default async function EventPage({ params }: EventPageProps) {
               </CardHeader>
               <CardContent>
                 <p className="font-body text-lg">{event.ticket_price_range}</p>
-                <Button className="w-full mt-4 font-body" size="lg">Purchase Tickets (Mock)</Button>
+                <Button className="w-full mt-4 font-body" size="lg" onClick={handlePurchaseClick}>Purchase Tickets (Mock)</Button>
               </CardContent>
             </Card>
             
@@ -140,7 +188,7 @@ export default async function EventPage({ params }: EventPageProps) {
                             alt={displayOrganizer.name} 
                             width={48} height={48} 
                             className="rounded-full" 
-                            data-ai-hint="person avatar" 
+                            data-ai-hint="person avatar"
                         />
                         <div>
                             <p className="font-body text-lg font-semibold group-hover:text-primary transition-colors">
