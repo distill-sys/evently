@@ -58,7 +58,7 @@ export default function TicketPurchaseDialog({ event, open, onOpenChange, onPurc
         paymentMethodId: '',
       });
       try {
-        const storedCards = localStorage.getItem(\`\${MOCK_SAVED_CARDS_KEY}_\${user.id}\`);
+        const storedCards = localStorage.getItem(MOCK_SAVED_CARDS_KEY + '_' + user.id);
         if (storedCards) {
           setSavedCards(JSON.parse(storedCards));
         } else {
