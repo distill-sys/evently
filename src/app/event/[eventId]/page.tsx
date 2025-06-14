@@ -6,19 +6,21 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { CalendarDays, MapPin, Ticket, Users, DollarSign, ArrowLeft, Building, Frown, Loader2 } from 'lucide-react';
+import { CalendarDays, MapPin, Ticket, Users, DollarSign, ArrowLeft, Building, Frown, Loader2, CheckCircle } from 'lucide-react';
 import { supabase } from '@/lib/supabaseClient';
 import { useParams } from 'next/navigation'; 
 import { useEffect, useState } from 'react'; 
 import { useToast } from '@/hooks/use-toast';
+import TicketPurchaseDialog from '@/components/events/TicketPurchaseDialog'; // Import the new dialog
 
 export default function EventPage() {
   const params = useParams(); 
   const eventId = params.eventId as string;
   const [event, setEvent] = useState<EventType | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [fetchError, setFetchError] = useState<string | null>(null); // To store any fetch errors
+  const [fetchError, setFetchError] = useState<string | null>(null);
   const { toast } = useToast();
+  const [isPurchaseDialogOpen, setIsPurchaseDialogOpen] = useState(false);
 
   useEffect(() => {
     async function getEventDetails(id: string): Promise<EventType | null> {
@@ -35,6 +37,7 @@ export default function EventPage() {
             profile_picture_url
           ),
           venue:venues (
+            venue_id,
             name,
             address,
             city,
@@ -55,11 +58,11 @@ export default function EventPage() {
 
     if (eventId) {
       setIsLoading(true);
-      setFetchError(null); // Reset error before new fetch
+      setFetchError(null);
       getEventDetails(eventId).then(data => {
         setEvent(data);
         setIsLoading(false);
-        if (!data && !fetchError) { // If no data and no explicit fetch error, set a generic not found error
+        if (!data && !fetchError) {
             setFetchError("Event not found.");
         }
       });
@@ -67,7 +70,22 @@ export default function EventPage() {
         setIsLoading(false);
         setFetchError("No event ID provided.");
     }
-  }, [eventId, fetchError]); // Added fetchError to dependencies, though it's set inside.
+  }, [eventId]); // Removed fetchError from dependency array as it caused re-fetch loop
+
+
+  const handlePurchaseSuccess = (details: { eventTitle: string; ticketQuantity: number }) => {
+    toast({
+      title: "Purchase Successful! (Mock)",
+      description: (
+        <div className="font-body">
+          <p>You've "purchased" {details.ticketQuantity} ticket(s) for "{details.eventTitle}".</p>
+          <p className="mt-1 text-xs">Your e-tickets will be sent to your email (not really!).</p>
+        </div>
+      ),
+      variant: "default", // Explicitly setting default, can customize later
+      duration: 5000,
+    });
+  };
 
 
   if (isLoading) {
@@ -98,25 +116,18 @@ export default function EventPage() {
     );
   }
 
-  const eventDate = new Date(event.date).toLocaleDateString('en-US', {
+  const eventDate = event.date ? new Date(event.date).toLocaleDateString('en-US', {
     year: 'numeric',
     month: 'long',
     day: 'numeric',
-  });
+  }) : 'Date not available';
 
   const displayOrganizer: OrganizerType | undefined = event.organizer ? {
     ...(event.organizer as UserProfile), 
     id: (event.organizer as UserProfile).auth_user_id, 
     profilePictureUrl: (event.organizer as UserProfile).profile_picture_url || 'https://placehold.co/120x120.png',
-    eventsHeld: 0, // This would ideally come from another query or be part of the fetched organizer data
+    eventsHeld: 0, 
   } : undefined;
-
-  const handlePurchaseClick = () => {
-    toast({
-      title: "Ticket Purchase (Mock)",
-      description: `This is a mock purchase for "${event.title}". No actual transaction will occur.`,
-    });
-  };
 
   return (
     <div className="max-w-4xl mx-auto py-8 space-y-8">
@@ -128,7 +139,7 @@ export default function EventPage() {
 
       <Card className="overflow-hidden shadow-xl">
         <Image
-          src={event.image_url || 'https://placehold.co/600x400.png'}
+          src={event.image_url || 'https://placehold.co/1200x500.png'}
           alt={event.title}
           width={1200}
           height={500}
@@ -168,7 +179,9 @@ export default function EventPage() {
               </CardHeader>
               <CardContent>
                 <p className="font-body text-lg">{event.ticket_price_range}</p>
-                <Button className="w-full mt-4 font-body" size="lg" onClick={handlePurchaseClick}>Purchase Tickets (Mock)</Button>
+                <Button className="w-full mt-4 font-body" size="lg" onClick={() => setIsPurchaseDialogOpen(true)}>
+                  Purchase Tickets
+                </Button>
               </CardContent>
             </Card>
             
@@ -218,13 +231,19 @@ export default function EventPage() {
                 </CardHeader>
                 <CardContent className="font-body space-y-1">
                     <p className="font-semibold">{event.venue.name}</p>
-                    <p>{event.venue.address}</p>
-                    <p>{event.venue.city}{event.venue.state_province ? `, ${event.venue.state_province}` : ''}, {event.venue.country}</p>
+                    <p>{event.venue.address || 'Address not available'}</p>
+                    <p>{event.venue.city}{event.venue.state_province ? `, ${event.venue.state_province}` : ''}{event.venue.country ? `, ${event.venue.country}`: ''}</p>
                 </CardContent>
             </Card>
           )}
         </CardContent>
       </Card>
+      <TicketPurchaseDialog 
+        event={event}
+        open={isPurchaseDialogOpen}
+        onOpenChange={setIsPurchaseDialogOpen}
+        onPurchaseSuccess={handlePurchaseSuccess}
+      />
     </div>
   );
 }
