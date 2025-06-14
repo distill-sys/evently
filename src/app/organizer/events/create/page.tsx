@@ -36,10 +36,10 @@ const eventSchema = z.object({
   imageUrl: z.string().url({ message: "Invalid image URL." }).optional().or(z.literal('')),
 }).refine(data => {
     // If a venue_id is present, location is not strictly required by this refine.
-    if (data.venue_id) {
+    if (data.venue_id && data.venue_id !== NO_VENUE_SENTINEL_VALUE) { // Check against sentinel
       return true;
     }
-    // If no venue_id, then location must be present and at least 3 characters long.
+    // If no venue_id (or sentinel chosen), then location must be present and at least 3 characters long.
     return !!data.location && data.location.trim().length >= 3;
   }, {
     message: "Event location details (min 3 chars) are required if no venue is selected.",
@@ -66,7 +66,7 @@ export default function CreateEventPage() {
       date: undefined,
       time: '',
       location: '',
-      venue_id: null,
+      venue_id: null, // Default to null, will be handled by sentinel value in select
       category: '',
       ticketPriceRange: '',
       imageUrl: '',
@@ -109,17 +109,21 @@ export default function CreateEventPage() {
     }
     setIsSaving(true);
 
+    const actualVenueId = data.venue_id === NO_VENUE_SENTINEL_VALUE ? null : data.venue_id;
+    const bookingStatus = actualVenueId ? 'pending' : 'not_requested';
+
     const eventPayload = {
       title: data.title,
       description: data.description,
       date: format(data.date, 'yyyy-MM-dd'),
       time: data.time,
-      location: data.location || (data.venue_id ? '' : 'Online'), // Default to empty or 'Online' if venue selected but no specific location detail
-      venue_id: data.venue_id || null,
+      location: data.location || (actualVenueId ? '' : 'Online'),
+      venue_id: actualVenueId,
       category: data.category,
       ticket_price_range: data.ticketPriceRange,
       image_url: data.imageUrl || `https://placehold.co/600x400.png?text=${encodeURIComponent(data.title)}`,
       organizer_id: authUser.id,
+      venue_booking_status: bookingStatus,
     };
 
     const { error } = await supabase.from('events').insert([eventPayload]);
@@ -135,7 +139,7 @@ export default function CreateEventPage() {
     } else {
       toast({
         title: "Event Created!",
-        description: `Event "${data.title}" has been successfully created.`,
+        description: `Event "${data.title}" has been successfully created. Venue selection is pending approval if applicable.`,
       });
       router.push(`/organizer/${authUser.id}`);
     }
@@ -249,7 +253,7 @@ export default function CreateEventPage() {
                   )}
                 />
               </div>
-              
+
               <FormField
                 control={form.control}
                 name="venue_id"
@@ -258,7 +262,7 @@ export default function CreateEventPage() {
                     <FormLabel className="font-headline">Venue (Optional)</FormLabel>
                     <Select
                         onValueChange={(value) => field.onChange(value === NO_VENUE_SENTINEL_VALUE ? null : value)}
-                        value={field.value || NO_VENUE_SENTINEL_VALUE} // Ensure sentinel or actual value
+                        value={field.value || NO_VENUE_SENTINEL_VALUE} 
                         disabled={isLoadingVenues}
                     >
                       <FormControl>
@@ -282,7 +286,7 @@ export default function CreateEventPage() {
                   </FormItem>
                 )}
               />
-              
+
               <FormField
                 control={form.control}
                 name="location"
@@ -345,3 +349,4 @@ export default function CreateEventPage() {
     </div>
   );
 }
+

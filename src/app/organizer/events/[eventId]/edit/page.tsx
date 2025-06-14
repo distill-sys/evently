@@ -37,9 +37,9 @@ const eventSchema = z.object({
   imageUrl: z.string().url({ message: "Invalid image URL." }).optional().or(z.literal('')),
 }).refine(data => {
     if (data.venue_id && data.venue_id !== NO_VENUE_SENTINEL_VALUE) {
-      return true; // Venue selected, location is optional
+      return true; 
     }
-    return !!data.location && data.location.trim().length >= 3; // No venue, location is required
+    return !!data.location && data.location.trim().length >= 3;
   }, {
     message: "Event location details (min 3 chars) are required if no venue is selected.",
     path: ["location"],
@@ -128,10 +128,10 @@ export default function EditEventPage() {
         form.reset({
           title: data.title,
           description: data.description,
-          date: data.date ? parseISO(data.date) : undefined, // Parse date string to Date object
+          date: data.date ? parseISO(data.date) : undefined,
           time: data.time,
           location: data.location || '',
-          venue_id: data.venue_id || null,
+          venue_id: data.venue_id || null, // Will be handled by sentinel value if null
           category: data.category,
           ticketPriceRange: data.ticket_price_range,
           imageUrl: data.image_url || '',
@@ -158,17 +158,28 @@ export default function EditEventPage() {
 
     setIsSaving(true);
 
-    const eventPayload = {
+    const actualVenueId = data.venue_id === NO_VENUE_SENTINEL_VALUE ? null : data.venue_id;
+    let newVenueBookingStatus = eventData.venue_booking_status;
+
+    if (actualVenueId !== eventData.venue_id) { // If venue has changed
+      newVenueBookingStatus = actualVenueId ? 'pending' : 'not_requested';
+    } else if (actualVenueId && !eventData.venue_booking_status) { // If venue was selected but had no status before
+        newVenueBookingStatus = 'pending';
+    }
+
+
+    const eventPayload: Partial<EventType> = { // Use Partial<EventType>
       title: data.title,
       description: data.description,
       date: format(data.date, 'yyyy-MM-dd'),
       time: data.time,
-      location: data.location || (data.venue_id ? '' : 'Online'),
-      venue_id: data.venue_id === NO_VENUE_SENTINEL_VALUE ? null : data.venue_id,
+      location: data.location || (actualVenueId ? '' : 'Online'),
+      venue_id: actualVenueId,
       category: data.category,
       ticket_price_range: data.ticketPriceRange,
       image_url: data.imageUrl || `https://placehold.co/600x400.png?text=${encodeURIComponent(data.title)}`,
-      updated_at: new Date().toISOString(), // Update the updated_at timestamp
+      updated_at: new Date().toISOString(),
+      venue_booking_status: newVenueBookingStatus,
     };
 
     const { error } = await supabase
@@ -221,9 +232,8 @@ export default function EditEventPage() {
       </Card>
     );
   }
-  
+
   if (!eventData) {
-    // This case should ideally be covered by fetchError, but as a fallback
     return <p className="text-center font-body">Event not found or you are not authorized.</p>;
   }
 
@@ -251,7 +261,7 @@ export default function EditEventPage() {
           <Card>
             <CardHeader>
               <CardTitle>Event Details</CardTitle>
-              <CardDescription>Update the information for your event.</CardDescription>
+              <CardDescription>Update the information for your event. Current venue booking status: <span className="font-semibold">{eventData.venue_booking_status || 'Not Set'}</span></CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
               <FormField
@@ -327,7 +337,7 @@ export default function EditEventPage() {
                   )}
                 />
               </div>
-              
+
               <FormField
                 control={form.control}
                 name="venue_id"
@@ -360,7 +370,7 @@ export default function EditEventPage() {
                   </FormItem>
                 )}
               />
-              
+
               <FormField
                 control={form.control}
                 name="location"
@@ -423,3 +433,4 @@ export default function EditEventPage() {
     </div>
   );
 }
+

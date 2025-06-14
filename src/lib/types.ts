@@ -42,24 +42,26 @@ export interface Event {
   venue_id?: string | null; // Optional Foreign Key to venues.venue_id
   created_at?: string;
   updated_at?: string;
+  venue_booking_status?: 'pending' | 'approved' | 'rejected' | 'not_requested' | null;
+  admin_notes_venue_booking?: string | null;
   organizer?: {
-    auth_user_id: string; 
+    auth_user_id: string;
     name: string;
     organization_name: string | null;
-  } | UserProfile | null; 
-  venue?: Pick<Venue, 'name' | 'address' | 'city' | 'state_province' | 'country'> | null;
+  } | UserProfile | null;
+  venue?: Pick<Venue, 'venue_id' | 'name' | 'address' | 'city' | 'state_province' | 'country'> | null;
 }
 
 export interface Organizer extends UserProfile {
-  eventsHeld?: number; 
+  eventsHeld?: number;
 }
 
 
 export interface SavedCard {
-  id: string; 
+  id: string;
   last4: string;
   expiryDate: string; // "MM/YY"
-  cardType: string; 
+  cardType: string;
 }
 
 // Represents the structure in your 'venues' table

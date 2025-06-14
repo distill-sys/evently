@@ -6,12 +6,13 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { CalendarDays, MapPin, Ticket, Users, DollarSign, ArrowLeft, Building, Frown, Loader2, CheckCircle } from 'lucide-react';
+import { CalendarDays, MapPin, Ticket, Users, DollarSign, ArrowLeft, Building, Frown, Loader2, CheckCircle, AlertTriangle, Info } from 'lucide-react';
 import { supabase } from '@/lib/supabaseClient';
 import { useParams } from 'next/navigation'; 
 import { useEffect, useState } from 'react'; 
 import { useToast } from '@/hooks/use-toast';
 import TicketPurchaseDialog from '@/components/events/TicketPurchaseDialog';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 
 export default function EventPage() {
   const params = useParams(); 
@@ -26,6 +27,7 @@ export default function EventPage() {
     async function getEventDetails(id: string): Promise<EventType | null> {
       const selectQuery =
         '*, ' +
+        'venue_booking_status, admin_notes_venue_booking, ' +
         'organizer:users (auth_user_id, name, email, organization_name, bio, profile_picture_url), ' +
         'venue:venues (venue_id, name, address, city, state_province, country)';
 
@@ -57,7 +59,7 @@ export default function EventPage() {
         setIsLoading(false);
         setFetchError("No event ID provided.");
     }
-  }, [eventId, fetchError]);
+  }, [eventId, fetchError]); // fetchError was in deps, keep it or remove? Usually not needed.
 
 
   const handlePurchaseSuccess = (details: { eventTitle: string; ticketQuantity: number; purchaseRecord: TicketPurchase }) => {
@@ -109,10 +111,12 @@ export default function EventPage() {
     day: 'numeric',
   }) : 'Date not available';
 
-  // Ensure organizer object has id for link, even if it's from UserProfile type
   const organizerForDisplay = event.organizer as (UserProfile & { id?: string });
   const organizerIdForLink = organizerForDisplay?.auth_user_id || (organizerForDisplay as any)?.id;
 
+  const canPurchaseTickets = event.venue_booking_status === 'approved' || 
+                             event.venue_booking_status === 'not_requested' || 
+                             !event.venue_booking_status; // Allow if status is null/undefined or not_requested (e.g. online event)
 
   return (
     <div className="max-w-4xl mx-auto py-8 space-y-8">
@@ -121,6 +125,27 @@ export default function EventPage() {
             <ArrowLeft className="mr-2 h-4 w-4" /> Back to All Events
           </Link>
       </Button>
+
+      {event.venue_booking_status === 'pending' && event.venue && (
+        <Alert variant="default" className="bg-yellow-50 border-yellow-300 text-yellow-700 dark:bg-yellow-900/30 dark:border-yellow-700 dark:text-yellow-400">
+          <Info className="h-5 w-5" />
+          <AlertTitle className="font-headline">Venue Confirmation Pending</AlertTitle>
+          <AlertDescription className="font-body">
+            The venue for this event ({event.venue.name}) is currently pending confirmation from platform administrators. Ticket purchases may be enabled once confirmed.
+          </AlertDescription>
+        </Alert>
+      )}
+      {event.venue_booking_status === 'rejected' && event.venue && (
+         <Alert variant="destructive">
+          <AlertTriangle className="h-5 w-5" />
+          <AlertTitle className="font-headline">Venue Not Available</AlertTitle>
+          <AlertDescription className="font-body">
+            The requested venue for this event ({event.venue.name}) was not approved. The organizer is working on securing an alternative or updating event details.
+            {event.admin_notes_venue_booking && <p className="mt-1 text-xs italic">Admin note: {event.admin_notes_venue_booking}</p>}
+          </AlertDescription>
+        </Alert>
+      )}
+
 
       <Card className="overflow-hidden shadow-xl">
         <Image
@@ -140,7 +165,7 @@ export default function EventPage() {
             </div>
             <div className="flex items-center">
               <MapPin className="h-5 w-5 mr-2 text-accent" />
-              <span>{event.venue ? `${event.venue.name}, ${event.venue.city}` : event.location}</span>
+              <span>{event.venue && event.venue_booking_status !== 'rejected' ? `${event.venue.name}, ${event.venue.city}` : event.location}</span>
             </div>
             <div className="flex items-center">
               <Ticket className="h-5 w-5 mr-2 text-accent" />
@@ -153,7 +178,7 @@ export default function EventPage() {
           <p className="font-body text-lg leading-relaxed text-foreground mb-6">
             {event.description}
           </p>
-          
+
           <div className="grid md:grid-cols-2 gap-6 mb-8">
             <Card className="bg-secondary/30">
               <CardHeader>
@@ -164,12 +189,22 @@ export default function EventPage() {
               </CardHeader>
               <CardContent>
                 <p className="font-body text-lg">{event.ticket_price_range}</p>
-                <Button className="w-full mt-4 font-body" size="lg" onClick={() => setIsPurchaseDialogOpen(true)}>
+                <Button 
+                    className="w-full mt-4 font-body" 
+                    size="lg" 
+                    onClick={() => setIsPurchaseDialogOpen(true)}
+                    disabled={!canPurchaseTickets || event.venue_booking_status === 'pending' || event.venue_booking_status === 'rejected'}
+                >
                   Purchase Tickets
                 </Button>
+                 {(!canPurchaseTickets && (event.venue_booking_status === 'pending' || event.venue_booking_status === 'rejected')) && (
+                    <p className="text-xs text-muted-foreground mt-2 font-body text-center">
+                        Ticket sales are disabled as the venue is {event.venue_booking_status}.
+                    </p>
+                )}
               </CardContent>
             </Card>
-            
+
             {organizerForDisplay && organizerIdForLink && (
               <Card className="bg-secondary/30">
                 <CardHeader>
@@ -181,11 +216,11 @@ export default function EventPage() {
                 <CardContent>
                   <Link href={`/organizer/${organizerIdForLink}`} className="block group">
                     <div className="flex items-center gap-3">
-                        <Image 
-                            src={organizerForDisplay.profile_picture_url || 'https://placehold.co/48x48.png'} 
-                            alt={organizerForDisplay.name} 
-                            width={48} height={48} 
-                            className="rounded-full" 
+                        <Image
+                            src={organizerForDisplay.profile_picture_url || 'https://placehold.co/48x48.png'}
+                            alt={organizerForDisplay.name}
+                            width={48} height={48}
+                            className="rounded-full"
                             data-ai-hint="person avatar"
                         />
                         <div>
@@ -206,7 +241,7 @@ export default function EventPage() {
             )}
           </div>
 
-          {event.venue && (
+          {event.venue && event.venue_booking_status !== 'rejected' && (
             <Card className="bg-secondary/30">
                 <CardHeader>
                     <CardTitle className="font-headline text-xl flex items-center">
@@ -218,12 +253,15 @@ export default function EventPage() {
                     <p className="font-semibold">{event.venue.name}</p>
                     <p>{event.venue.address || 'Address not available'}</p>
                     <p>{event.venue.city}{event.venue.state_province ? `, ${event.venue.state_province}` : ''}{event.venue.country ? `, ${event.venue.country}`: ''}</p>
+                     {event.venue_booking_status === 'pending' && (
+                        <p className="text-sm text-yellow-600 dark:text-yellow-400 font-semibold italic"> (Venue booking pending confirmation)</p>
+                    )}
                 </CardContent>
             </Card>
           )}
         </CardContent>
       </Card>
-      <TicketPurchaseDialog 
+      <TicketPurchaseDialog
         event={event}
         open={isPurchaseDialogOpen}
         onOpenChange={setIsPurchaseDialogOpen}
