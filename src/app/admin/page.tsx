@@ -89,7 +89,9 @@ export default function AdminPage() {
             <CardDescription className="font-body">Configure global settings and features.</CardDescription>
           </CardHeader>
           <CardContent>
-            <Button className="w-full font-body" variant="outline" disabled>Configure Settings (Coming Soon)</Button>
+            <Button className="w-full font-body" asChild>
+              <Link href="/admin/settings">Configure Settings</Link>
+            </Button>
           </CardContent>
         </Card>
       </div>
