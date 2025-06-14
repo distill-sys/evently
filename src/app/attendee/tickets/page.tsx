@@ -29,30 +29,42 @@ export default function AttendeeTicketsPage() {
     setIsLoadingTickets(true);
     setFetchError(null);
 
+    const selectQuery = `
+      purchase_id,
+      quantity,
+      purchase_date,
+      status,
+      updated_at,
+      event_id,
+      events (
+        event_id,
+        title,
+        date,
+        time,
+        image_url,
+        location,
+        ticket_price_range
+      )
+    `;
+
     const { data, error } = await supabase
       .from('ticket_purchases')
-      .select(`
-        purchase_id,
-        quantity,
-        purchase_date,
-        status,
-        updated_at,
-        event_id,
-        events (
-          event_id,
-          title,
-          date,
-          time,
-          image_url,
-          location,
-          ticket_price_range
-        )
-      `)
+      .select(selectQuery)
       .eq('attendee_user_id', authUser.id)
       .order('purchase_date', { ascending: false });
 
     if (error) {
-      console.error('Error fetching ticket history:', error);
+      console.error(
+        'Error fetching ticket history. Message:', error.message, 
+        'Details:', error.details, 
+        'Hint:', error.hint, 
+        'Code:', error.code
+      );
+      if (Object.keys(error).length === 0 || (!error.message && !error.details && !error.hint && !error.code)) {
+        console.error(`Full error object was empty or lacked specific details. Query was: supabase.from('ticket_purchases').select("${selectQuery.replace(/\s+/g, ' ').trim()}").eq('attendee_user_id', authUser.id).order('purchase_date', { ascending: false })`);
+      } else {
+        console.error('Full error object:', JSON.stringify(error, null, 2));
+      }
       setFetchError('Could not fetch your ticket history. Please try again later.');
       setTickets([]);
     } else {
@@ -91,7 +103,7 @@ export default function AttendeeTicketsPage() {
     } else {
       toast({
         title: "Ticket Cancelled",
-        description: "Your ticket has been successfully cancelled. A mock refund has been processed.",
+        description: "Your ticket has been successfully cancelled. A refund has been processed.",
       });
       fetchTicketHistory(); // Re-fetch tickets to update the list
     }
