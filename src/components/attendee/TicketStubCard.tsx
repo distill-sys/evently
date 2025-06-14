@@ -17,9 +17,6 @@ interface TicketStubCardProps {
 export default function TicketStubCard({ ticket, onCancel, isCancelling }: TicketStubCardProps) {
   const event = ticket.events;
 
-  // Diagnostic log
-  console.log(`TicketStubCard rendering for purchase_id: ${ticket.purchase_id}, status: "${ticket.status}"`);
-
   if (!event) {
     return (
       <Card className="shadow-md hover:shadow-lg transition-shadow duration-300 animate-pulse">

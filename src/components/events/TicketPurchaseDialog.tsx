@@ -133,7 +133,6 @@ export default function TicketPurchaseDialog({ event, open, onOpenChange, onPurc
     }
 
     // If Supabase insert is successful
-    console.log("Ticket purchase record saved to Supabase:", purchaseRecord);
     setIsProcessing(false);
     onPurchaseSuccess({ eventTitle: event.title, ticketQuantity: data.ticketQuantity, purchaseRecord });
     form.reset();
@@ -251,4 +250,3 @@ export default function TicketPurchaseDialog({ event, open, onOpenChange, onPurc
     </Dialog>
   );
 }
-

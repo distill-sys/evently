@@ -30,7 +30,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const { toast } = useToast();
 
   const fetchUserProfile = useCallback(async (supabaseUser: SupabaseUser): Promise<User | null> => {
-    console.log('Fetching user profile for:', supabaseUser.id);
     const { data: profile, error } = await supabase
       .from('users')
       .select('name, role, organization_name, bio, profile_picture_url')
@@ -66,7 +65,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     }
 
     if (profile) {
-      console.log('User profile fetched successfully:', profile);
       return {
         id: supabaseUser.id,
         email: supabaseUser.email || '',
@@ -77,7 +75,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         profilePictureUrl: profile.profile_picture_url,
       };
     }
-    console.log('No user profile found for:', supabaseUser.id); // This can be normal if PGRST116 and profile is null
     return null;
   }, [toast]);
 
@@ -85,7 +82,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   useEffect(() => {
     setIsLoading(true);
     const { data: authListener } = supabase.auth.onAuthStateChange(async (_event, session: Session | null) => {
-      console.log('onAuthStateChange event:', _event, 'session:', session);
       try {
         if (session?.user) {
           const userProfile = await fetchUserProfile(session.user);
@@ -93,14 +89,12 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
             setUser(userProfile);
             setRole(userProfile.role || null);
           } else {
-            // If fetchUserProfile returned null (e.g., due to RLS error or no profile yet),
-            // set a minimal user object from Supabase auth user.
             setUser({
               id: session.user.id,
               email: session.user.email || '',
-              name: session.user.email?.split('@')[0] || 'User', // Fallback name
+              name: session.user.email?.split('@')[0] || 'User', 
             });
-            setRole(null); // Role is unknown or couldn't be fetched
+            setRole(null); 
           }
         } else {
           setUser(null);
@@ -112,7 +106,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         setRole(null);
       } finally {
         setIsLoading(false);
-        console.log('onAuthStateChange finished, isLoading set to false.');
       }
     });
 
@@ -123,7 +116,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   const signIn = async (email: string, password_unsafe: string) => {
     setIsLoading(true);
-    console.log('Attempting sign in for:', email);
     const { error } = await supabase.auth.signInWithPassword({ email, password: password_unsafe });
     if (error) {
       setIsLoading(false);
@@ -131,7 +123,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       toast({ title: 'Login Failed', description: error.message, variant: 'destructive'});
     } else {
       toast({ title: 'Logged In!', description: 'Welcome back!' });
-      // onAuthStateChange will handle setUser, setRole and final setIsLoading(false)
     }
     return { error };
   };
@@ -146,7 +137,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         toast({ title: 'Sign Up Failed', description: err.message, variant: 'destructive'});
         return { error: err };
     }
-    console.log('Attempting sign up for:', email, 'with role:', selectedRole);
 
     const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
       email,
@@ -160,8 +150,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       return { error: signUpError };
     }
 
-    console.log('Supabase auth.signUp successful. signUpData:', signUpData);
-
     if (signUpData.user) {
       const insertPayload = {
         auth_user_id: signUpData.user.id,
@@ -172,15 +160,12 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         bio: selectedRole === 'organizer' ? userData.bio : null,
         profile_picture_url: userData.profilePictureUrl || null,
       };
-      console.log('Attempting to insert user profile with payload:', insertPayload);
 
       const { data: insertedProfileData, error: insertError } = await supabase
         .from('users')
         .insert(insertPayload)
         .select()
         .single(); 
-
-      console.log('User profile insert operation completed. Error:', insertError, 'Data:', insertedProfileData);
 
       if (insertError) {
         setIsLoading(false); 
@@ -209,9 +194,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         return { error: { name: "ProfileCreationError", message: isRecursionError ? recursionMessage : (insertError.message || 'Unknown profile creation error.') } as AuthError };
       }
       
-      console.log('User profile inserted successfully:', insertedProfileData);
       toast({ title: 'Account Created!', description: `Welcome, ${userData.name || 'User'}! Please check your email to confirm your account if required.` });
-      // onAuthStateChange will set isLoading to false after processing.
     } else {
       setIsLoading(false); 
       console.warn("Supabase auth.signUp was successful but signUpData.user is null. This might be expected if email confirmation is required and no immediate session is created. Full signUpData:", signUpData);
@@ -224,17 +207,14 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   const logout = async () => {
     setIsLoading(true);
-    console.log('Attempting logout.');
     await supabase.auth.signOut();
     router.push('/'); 
     toast({ title: 'Logged Out', description: 'You have been successfully logged out.' });
-    // setUser, setRole, and setIsLoading(false) will be handled by onAuthStateChange
   };
 
   const selectRole = async (selectedRole: UserRole) => {
     if (user) {
       setIsLoading(true);
-      console.log('Attempting to select role:', selectedRole, 'for user:', user.id);
       const { error } = await supabase
         .from('users')
         .update({ role: selectedRole })
@@ -258,7 +238,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       setUser(prevUser => prevUser ? { ...prevUser, role: selectedRole } : null);
       setIsLoading(false);
       toast({ title: 'Role Selected', description: `Your role has been set to ${selectedRole}.` });
-      console.log('Role selected successfully. Navigating...');
       
       switch (selectedRole) {
         case 'attendee':
