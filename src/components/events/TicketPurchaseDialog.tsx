@@ -10,10 +10,12 @@ import { Button } from '@/components/ui/button';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-// import { useToast } from '@/hooks/use-toast'; // No longer directly used here for success, parent handles it.
 import { useAuth } from '@/contexts/AuthContext';
 import type { Event as EventType, SavedCard, TicketPurchase } from '@/lib/types';
 import { Loader2, CreditCard, Ticket } from 'lucide-react';
+import { supabase } from '@/lib/supabaseClient';
+import { useToast } from '@/hooks/use-toast';
+
 
 const MOCK_SAVED_CARDS_KEY = 'evently_mock_saved_cards';
 
@@ -35,7 +37,7 @@ interface TicketPurchaseDialogProps {
 
 export default function TicketPurchaseDialog({ event, open, onOpenChange, onPurchaseSuccess }: TicketPurchaseDialogProps) {
   const { user } = useAuth();
-  // const { toast } = useToast(); // Removed as success toast is handled by parent page
+  const { toast } = useToast();
   const [isProcessing, setIsProcessing] = useState(false);
   const [savedCards, setSavedCards] = useState<SavedCard[]>([]);
 
@@ -83,32 +85,56 @@ export default function TicketPurchaseDialog({ event, open, onOpenChange, onPurc
 
   const onSubmit = async (data: TicketPurchaseFormData) => {
     setIsProcessing(true);
-    // Simulate payment processing
-    await new Promise(resolve => setTimeout(resolve, 1500));
-    setIsProcessing(false);
-
+    
     if (!user) {
-        // This case should ideally be handled by disabling the form or button if no user
-        console.error("Purchase attempted without a logged-in user.");
-        // Optionally show a toast error here, though the form should prevent submission
+        toast({
+            title: "Authentication Error",
+            description: "You must be logged in to purchase tickets.",
+            variant: "destructive"
+        });
+        setIsProcessing(false);
+        return;
+    }
+     if (!event.organizer_id) {
+        toast({
+            title: "Event Data Error",
+            description: "The event organizer information is missing. Cannot complete purchase.",
+            variant: "destructive"
+        });
+        setIsProcessing(false);
         return;
     }
     
     const purchaseRecord: TicketPurchase = {
-        purchase_id: `purchase_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
+        purchase_id: `purchase_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`, // Ensure unique ID generation
         event_id: event.event_id,
         attendee_user_id: user.id,
-        organizer_user_id: event.organizer_id, // Assuming event object has organizer_id
+        organizer_user_id: event.organizer_id, 
         quantity: data.ticketQuantity,
         purchase_date: new Date().toISOString(),
-        payment_method_id: data.paymentMethodId,
+        payment_method_id: data.paymentMethodId, // This is the mock card ID
         status: 'confirmed'
     };
 
-    console.log("Simulating saving ticket purchase to backend:", purchaseRecord);
-    // In a real app, you would now send this purchaseRecord to your backend/Supabase.
-    // e.g., await supabase.from('ticket_purchases').insert([purchaseRecord]);
+    // Attempt to save to Supabase
+    const { error: insertError } = await supabase
+      .from('ticket_purchases')
+      .insert([purchaseRecord]);
 
+    if (insertError) {
+      console.error("Error saving ticket purchase to Supabase:", insertError);
+      toast({
+        title: "Purchase Failed",
+        description: `Could not save your ticket purchase: ${insertError.message}. Please try again.`,
+        variant: "destructive"
+      });
+      setIsProcessing(false);
+      return;
+    }
+
+    // If Supabase insert is successful
+    console.log("Ticket purchase record saved to Supabase:", purchaseRecord);
+    setIsProcessing(false);
     onPurchaseSuccess({ eventTitle: event.title, ticketQuantity: data.ticketQuantity, purchaseRecord });
     form.reset();
     onOpenChange(false); // Close dialog
@@ -225,3 +251,4 @@ export default function TicketPurchaseDialog({ event, open, onOpenChange, onPurc
     </Dialog>
   );
 }
+
