@@ -8,7 +8,7 @@ import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabaseClient';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Loader2, Users, CalendarDays, BuildingIcon, ArrowLeft, LineChart as LineChartIcon, ServerCrash, PieChart as PieChartIcon } from 'lucide-react';
+import { Loader2, Users, CalendarDays, BuildingIcon, ArrowLeft, LineChart as LineChartIcon, ServerCrash, PieChart as PieChartIcon, Ticket } from 'lucide-react';
 import { PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import type { UserRole } from '@/lib/types';
 
@@ -16,14 +16,15 @@ interface PlatformStats {
   users: number;
   events: number;
   venues: number;
+  ticketPurchases: number;
 }
 
 interface UserRoleDistribution {
-  role: UserRole | string; // Can be 'unknown' if role is null
+  role: UserRole | string;
   count: number;
 }
 
-const COLORS = ['#4285F4', '#00A2E8', '#34A853', '#FBBC05', '#EA4335']; // Primary, Accent, Green, Yellow, Red
+const COLORS = ['#4285F4', '#00A2E8', '#34A853', '#FBBC05', '#EA4335'];
 
 export default function AdminAnalyticsPage() {
   const { user: authUser, role, isLoading: authLoading } = useAuth();
@@ -45,16 +46,18 @@ export default function AdminAnalyticsPage() {
         setIsLoadingData(true);
         setFetchError(null);
         try {
-          const [usersCountRes, eventsCountRes, venuesCountRes, userRolesRpcResult] = await Promise.all([
+          const [usersCountRes, eventsCountRes, venuesCountRes, ticketPurchasesCountRes, userRolesRpcResult] = await Promise.all([
             supabase.from('users').select('*', { count: 'exact', head: true }),
             supabase.from('events').select('*', { count: 'exact', head: true }),
             supabase.from('venues').select('*', { count: 'exact', head: true }),
-            supabase.rpc('get_user_role_distribution') // Call the RPC function
+            supabase.from('ticket_purchases').select('*', { count: 'exact', head: true }),
+            supabase.rpc('get_user_role_distribution')
           ]);
 
           if (usersCountRes.error) throw usersCountRes.error;
           if (eventsCountRes.error) throw eventsCountRes.error;
           if (venuesCountRes.error) throw venuesCountRes.error;
+          if (ticketPurchasesCountRes.error) throw ticketPurchasesCountRes.error;
           if (userRolesRpcResult.error) {
             console.error(
               'Error fetching user role distribution via RPC. Message:', userRolesRpcResult.error.message,
@@ -74,9 +77,9 @@ export default function AdminAnalyticsPage() {
             users: usersCountRes.count || 0,
             events: eventsCountRes.count || 0,
             venues: venuesCountRes.count || 0,
+            ticketPurchases: ticketPurchasesCountRes.count || 0,
           });
           
-          // Map rpcData: { role: 'somerole', user_count: N } to { role: 'somerole', count: N }
           const formattedRolesData = (userRolesRpcResult.data || []).map(item => ({
             role: item.role || 'Unknown',
             count: item.user_count || 0, 
@@ -141,7 +144,7 @@ export default function AdminAnalyticsPage() {
         </Card>
       ) : stats ? (
         <>
-          <div className="grid md:grid-cols-3 gap-6">
+          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
             <Card className="hover:shadow-lg transition-shadow">
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium font-headline">Total Users</CardTitle>
@@ -172,6 +175,16 @@ export default function AdminAnalyticsPage() {
                 <p className="text-xs text-muted-foreground font-body">Venues available in the system.</p>
               </CardContent>
             </Card>
+            <Card className="hover:shadow-lg transition-shadow">
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium font-headline">Total Tickets Sold</CardTitle>
+                <Ticket className="h-5 w-5 text-primary" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-3xl font-bold font-headline">{stats.ticketPurchases}</div>
+                <p className="text-xs text-muted-foreground font-body">Confirmed ticket purchases.</p>
+              </CardContent>
+            </Card>
           </div>
 
           {userRoleData.length > 0 && (
@@ -192,7 +205,7 @@ export default function AdminAnalyticsPage() {
                         cx="50%"
                         cy="50%"
                         labelLine={false}
-                        label={({ cx, cy, midAngle, innerRadius, outerRadius, percent, index, role }) => {
+                        label={({ cx, cy, midAngle, innerRadius, outerRadius, percent, index }) => {
                           const RADIAN = Math.PI / 180;
                           const radius = innerRadius + (outerRadius - innerRadius) * 0.5;
                           const x = cx + radius * Math.cos(-midAngle * RADIAN);
