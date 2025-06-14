@@ -50,6 +50,10 @@ export default function AttendeePage() {
           organizer:users (
             name,
             organization_name
+          ),
+          venue:venues (
+            name,
+            city
           )
         `)
         .order('date', { ascending: true });
@@ -78,29 +82,37 @@ export default function AttendeePage() {
 
   const locations = useMemo(() => {
     if (!allEvents) return [];
-    return Array.from(new Set(allEvents.map(event => event.location).filter(Boolean) as string[]));
+    // Consider combining venue city and event location if venue exists
+    const eventLocations = allEvents.map(event => {
+      if (event.venue && event.venue.city) return event.venue.city;
+      return event.location;
+    });
+    return Array.from(new Set(eventLocations.filter(Boolean) as string[]));
   }, [allEvents]);
 
   const handleSearch = (filters: { keyword: string; location: string; date: Date | undefined; category: string }) => {
-    let events = allEvents || [];
+    let eventsToFilter = [...allEvents]; // Start with a fresh copy of all events
 
     if (filters.keyword) {
-      events = events.filter(event =>
+      eventsToFilter = eventsToFilter.filter(event =>
         (event.title?.toLowerCase() || '').includes(filters.keyword.toLowerCase()) ||
         (event.description?.toLowerCase() || '').includes(filters.keyword.toLowerCase())
       );
     }
     if (filters.location) {
-      events = events.filter(event => event.location === filters.location);
+      eventsToFilter = eventsToFilter.filter(event => {
+        const eventLocation = (event.venue && event.venue.city) ? event.venue.city : event.location;
+        return eventLocation === filters.location;
+      });
     }
     if (filters.date) {
       const filterDateStr = filters.date.toISOString().split('T')[0];
-      events = events.filter(event => event.date === filterDateStr);
+      eventsToFilter = eventsToFilter.filter(event => event.date === filterDateStr);
     }
     if (filters.category) {
-      events = events.filter(event => event.category === filters.category);
+      eventsToFilter = eventsToFilter.filter(event => event.category === filters.category);
     }
-    setFilteredEvents(events);
+    setFilteredEvents(eventsToFilter);
   };
 
   if (authLoading) { // Show primary auth loading first

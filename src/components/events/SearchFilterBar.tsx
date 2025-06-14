@@ -21,24 +21,24 @@ const ALL_CATEGORIES_VALUE = "--all-categories--";
 
 export default function SearchFilterBar({ onSearch, categories, locations }: SearchFilterBarProps) {
   const [keyword, setKeyword] = useState('');
-  const [location, setLocation] = useState('');
-  const [date, setDate] = useState<Date | undefined>();
-  const [category, setCategory] = useState('');
+  const [selectedLocation, setSelectedLocation] = useState(''); // Renamed for clarity
+  const [selectedDate, setSelectedDate] = useState<Date | undefined>(); // Renamed for clarity
+  const [selectedCategory, setSelectedCategory] = useState(''); // Renamed for clarity
 
-  const handleSearch = () => {
+  const handleSearchClick = () => {
     onSearch({ 
       keyword, 
-      location: location === ALL_LOCATIONS_VALUE ? '' : location, 
-      date, 
-      category: category === ALL_CATEGORIES_VALUE ? '' : category 
+      location: selectedLocation === ALL_LOCATIONS_VALUE ? '' : selectedLocation, 
+      date: selectedDate, 
+      category: selectedCategory === ALL_CATEGORIES_VALUE ? '' : selectedCategory 
     });
   };
 
-  const clearFilters = () => {
+  const handleClearFiltersClick = () => {
     setKeyword('');
-    setLocation(''); // Resets to placeholder
-    setDate(undefined);
-    setCategory(''); // Resets to placeholder
+    setSelectedLocation(ALL_LOCATIONS_VALUE); 
+    setSelectedDate(undefined);
+    setSelectedCategory(ALL_CATEGORIES_VALUE); 
     onSearch({ keyword: '', location: '', date: undefined, category: '' });
   }
 
@@ -65,7 +65,7 @@ export default function SearchFilterBar({ onSearch, categories, locations }: Sea
         <label htmlFor="location-select" className="block text-sm font-medium text-foreground font-headline mb-1">
           Location
         </label>
-        <Select value={location} onValueChange={setLocation}>
+        <Select value={selectedLocation || ALL_LOCATIONS_VALUE} onValueChange={setSelectedLocation}>
           <SelectTrigger className="font-body w-full">
             <MapPin className="h-4 w-4 mr-2 text-muted-foreground" />
             <SelectValue placeholder="Any Location" />
@@ -89,14 +89,14 @@ export default function SearchFilterBar({ onSearch, categories, locations }: Sea
               className="w-full justify-start text-left font-normal font-body"
             >
               <CalendarDays className="mr-2 h-4 w-4 text-muted-foreground" />
-              {date ? format(date, "PPP") : <span>Pick a date</span>}
+              {selectedDate ? format(selectedDate, "PPP") : <span>Pick a date</span>}
             </Button>
           </PopoverTrigger>
           <PopoverContent className="w-auto p-0">
             <Calendar
               mode="single"
-              selected={date}
-              onSelect={setDate}
+              selected={selectedDate}
+              onSelect={setSelectedDate}
               initialFocus
             />
           </PopoverContent>
@@ -107,7 +107,7 @@ export default function SearchFilterBar({ onSearch, categories, locations }: Sea
         <label htmlFor="category-select" className="block text-sm font-medium text-foreground font-headline mb-1">
           Category
         </label>
-        <Select value={category} onValueChange={setCategory}>
+        <Select value={selectedCategory || ALL_CATEGORIES_VALUE} onValueChange={setSelectedCategory}>
           <SelectTrigger className="font-body w-full">
             <Tag className="h-4 w-4 mr-2 text-muted-foreground" />
             <SelectValue placeholder="Any Category" />
@@ -120,10 +120,10 @@ export default function SearchFilterBar({ onSearch, categories, locations }: Sea
       </div>
       
       <div className="flex gap-2 pt-4 md:pt-0 md:self-end">
-        <Button onClick={handleSearch} className="font-body w-full md:w-auto">
+        <Button onClick={handleSearchClick} className="font-body w-full md:w-auto">
           <Search className="mr-2 h-4 w-4" /> Search
         </Button>
-         <Button onClick={clearFilters} variant="outline" className="font-body w-full md:w-auto">
+         <Button onClick={handleClearFiltersClick} variant="outline" className="font-body w-full md:w-auto">
           <Filter className="mr-2 h-4 w-4" /> Clear
         </Button>
       </div>
