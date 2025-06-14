@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { CalendarDays, MapPin, Ticket, Users, DollarSign, ArrowLeft, Building, Frown, Loader2, CheckCircle } from 'lucide-react';
 import { supabase } from '@/lib/supabaseClient';
-import { useParams, notFound } from 'next/navigation'; 
+import { useParams } from 'next/navigation'; 
 import { useEffect, useState } from 'react'; 
 import { useToast } from '@/hooks/use-toast';
 import TicketPurchaseDialog from '@/components/events/TicketPurchaseDialog';
@@ -24,27 +24,14 @@ export default function EventPage() {
 
   useEffect(() => {
     async function getEventDetails(id: string): Promise<EventType | null> {
+      const selectQuery =
+        '*, ' +
+        'organizer:users (auth_user_id, name, email, organization_name, bio, profile_picture_url), ' +
+        'venue:venues (venue_id, name, address, city, state_province, country)';
+
       const { data, error } = await supabase
         .from('events')
-        .select(\`
-          *,
-          organizer:users (
-            auth_user_id,
-            name,
-            email,
-            organization_name,
-            bio,
-            profile_picture_url
-          ),
-          venue:venues (
-            venue_id,
-            name,
-            address,
-            city,
-            state_province,
-            country
-          )
-        \`)
+        .select(selectQuery)
         .eq('event_id', id)
         .single();
 
@@ -155,7 +142,7 @@ export default function EventPage() {
             </div>
             <div className="flex items-center">
               <MapPin className="h-5 w-5 mr-2 text-accent" />
-              <span>{event.venue ? \`\${event.venue.name}, \${event.venue.city}\` : event.location}</span>
+              <span>{event.venue ? `${event.venue.name}, ${event.venue.city}` : event.location}</span>
             </div>
             <div className="flex items-center">
               <Ticket className="h-5 w-5 mr-2 text-accent" />
@@ -232,7 +219,7 @@ export default function EventPage() {
                 <CardContent className="font-body space-y-1">
                     <p className="font-semibold">{event.venue.name}</p>
                     <p>{event.venue.address || 'Address not available'}</p>
-                    <p>{event.venue.city}{event.venue.state_province ? \`, \${event.venue.state_province}\` : ''}{event.venue.country ? \`, \${event.venue.country}\`: ''}</p>
+                    <p>{event.venue.city}{event.venue.state_province ? `, ${event.venue.state_province}` : ''}{event.venue.country ? `, ${event.venue.country}`: ''}</p>
                 </CardContent>
             </Card>
           )}
@@ -247,3 +234,5 @@ export default function EventPage() {
     </div>
   );
 }
+
+    
