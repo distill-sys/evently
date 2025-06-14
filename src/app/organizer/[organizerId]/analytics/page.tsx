@@ -2,7 +2,8 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
-import { useParams, useRouter, Link } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
+import Link from 'next/link'; // Corrected import
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabaseClient';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
