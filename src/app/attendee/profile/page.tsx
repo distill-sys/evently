@@ -16,7 +16,11 @@ import type { SavedCard } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
 
 const cardSchema = z.object({
-  cardNumber: z.string().regex(/^\d{16}$/, "Card number must be 16 digits."),
+  cardNumber: z.string()
+    .transform(val => val.replace(/\s/g, '')) // Remove spaces
+    .refine(val => /^\d{16}$/.test(val), { // Test if it's exactly 16 digits
+      message: "Card number must be 16 digits.",
+    }),
   expiryDate: z.string().regex(/^(0[1-9]|1[0-2])\/\d{2}$/, "Expiry date must be MM/YY."),
   cvv: z.string().regex(/^\d{3,4}$/, "CVV must be 3 or 4 digits."),
   nameOnCard: z.string().min(2, "Name on card is required."),
@@ -61,10 +65,11 @@ export default function AttendeeProfilePage() {
   const handleSaveCard = (values: z.infer<typeof cardSchema>) => {
     setIsSaving(true);
     // Mock saving card
+    // In a real app, `values.cardNumber` would be the space-stripped 16-digit number due to the transform
     setTimeout(() => {
       const newCard: SavedCard = {
         id: `card_${Date.now()}`,
-        last4: values.cardNumber.slice(-4),
+        last4: values.cardNumber.slice(-4), // This will use the transformed (space-stripped) card number
         expiryDate: values.expiryDate,
         cardType: 'Visa', // Mock card type
       };
@@ -124,7 +129,7 @@ export default function AttendeeProfilePage() {
             </CardTitle>
             <CardDescription className="font-body">Manage your saved credit/debit cards for faster checkout.</CardDescription>
           </div>
-          <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+          <Dialog open={isDialogOpen} onOpenChange={(open) => { setIsDialogOpen(open); if (!open) form.reset(); }}>
             <DialogTrigger asChild>
               <Button className="font-body" onClick={() => setIsDialogOpen(true)}>
                 <PlusCircle className="mr-2 h-5 w-5" /> Add New Card
@@ -161,7 +166,7 @@ export default function AttendeeProfilePage() {
                   </div>
                 </div>
                 <DialogFooter>
-                  <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)} className="font-body">Cancel</Button>
+                  <Button type="button" variant="outline" onClick={() => { setIsDialogOpen(false); form.reset(); }} className="font-body">Cancel</Button>
                   <Button type="submit" disabled={isSaving} className="font-body">
                     {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
                     Save Card
