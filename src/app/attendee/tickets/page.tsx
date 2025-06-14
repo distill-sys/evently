@@ -34,7 +34,6 @@ export default function AttendeeTicketsPage() {
       quantity,
       purchase_date,
       status,
-      updated_at,
       event_id,
       events (
         event_id,
@@ -89,7 +88,7 @@ export default function AttendeeTicketsPage() {
 
     const { error } = await supabase
       .from('ticket_purchases')
-      .update({ status: 'cancelled', updated_at: new Date().toISOString() })
+      .update({ status: 'cancelled' }) // Removed updated_at
       .eq('purchase_id', purchaseId)
       .eq('attendee_user_id', authUser.id); // Ensure user can only cancel their own
 
@@ -188,3 +187,4 @@ export default function AttendeeTicketsPage() {
     </div>
   );
 }
+

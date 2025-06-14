@@ -93,7 +93,7 @@ export interface TicketPurchase {
   purchase_date: string; // ISO string
   payment_method_id?: string;
   status?: 'confirmed' | 'pending' | 'cancelled';
-  updated_at?: string; // For tracking cancellation time
+  // updated_at is removed as it's not in the DB schema currently
 
   // Joined event details - Supabase returns joined table as a nested object
   events?: { // Property name 'events' matches the table name
@@ -106,3 +106,4 @@ export interface TicketPurchase {
     ticket_price_range: string;
   } | null;
 }
+
