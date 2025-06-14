@@ -67,11 +67,10 @@ export default function EventPage() {
         <div className="font-body">
           <p>You've purchased {details.ticketQuantity} ticket(s) for "{details.eventTitle}".</p>
           <p className="mt-1 text-xs">Your e-tickets will be sent to your email.</p>
-          <p className="mt-1 text-xs">Purchase ID (mock): {details.purchaseRecord.purchase_id}</p>
         </div>
       ),
       variant: "default",
-      duration: 7000, // Increased duration to see purchase ID
+      duration: 7000,
     });
   };
 
@@ -233,3 +232,4 @@ export default function EventPage() {
     </div>
   );
 }
+
