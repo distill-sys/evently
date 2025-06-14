@@ -40,12 +40,11 @@ export default function AdminVenueApprovalsPage() {
     const { data, error } = await supabase
       .from('events')
       .select(selectQuery)
-      .not('venue_id', 'is', null) // Ensure venue_id is not null more explicitly
+      .not('venue_id', 'is', null) 
       .eq('venue_booking_status', 'pending')
       .order('date', { ascending: true });
 
     if (error) {
-      // Enhanced error logging
       let descriptiveError = 'Could not fetch pending venue approvals. Please try again later.';
       if (error && typeof error === 'object') {
         if (error.message) {
@@ -107,7 +106,7 @@ export default function AdminVenueApprovalsPage() {
         title: `Venue ${newStatus === 'approved' ? 'Approved' : 'Rejected'}`,
         description: `The venue booking status for the event has been updated.`,
       });
-      fetchPendingVenueApprovals(); // Refresh the list
+      fetchPendingVenueApprovals(); 
     }
   };
 
@@ -122,7 +121,6 @@ export default function AdminVenueApprovalsPage() {
   }
 
   if (!authUser || role !== 'admin') {
-    // This is a fallback, useEffect should handle redirect
     return (
       <div className="flex flex-col items-center justify-center min-h-[calc(100vh-16rem)]">
         <AlertTriangle className="h-12 w-12 text-destructive mb-4" />
@@ -195,8 +193,8 @@ export default function AdminVenueApprovalsPage() {
                 {pendingEvents.map((event) => (
                   <TableRow key={event.event_id} className="font-body">
                     <TableCell className="font-semibold">{event.title}</TableCell>
-                    <TableCell>{event.organizer?.name || 'N/A'}</TableCell>
-                    <TableCell>{event.venue?.name || 'N/A'}</TableCell>
+                    <TableCell>{typeof event.organizer === 'object' && event.organizer !== null && 'name' in event.organizer ? event.organizer.name : 'N/A'}</TableCell>
+                    <TableCell>{typeof event.venue === 'object' && event.venue !== null && 'name' in event.venue ? event.venue.name : 'N/A'}</TableCell>
                     <TableCell>
                       {event.date ? format(new Date(event.date), 'PPP') : 'N/A'}
                     </TableCell>
