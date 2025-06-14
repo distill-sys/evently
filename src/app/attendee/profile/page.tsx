@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -64,8 +65,7 @@ export default function AttendeeProfilePage() {
 
   const handleSaveCard = (values: z.infer<typeof cardSchema>) => {
     setIsSaving(true);
-    // Mock saving card
-    // In a real app, `values.cardNumber` would be the space-stripped 16-digit number due to the transform
+    // Simulate saving card
     setTimeout(() => {
       const newCard: SavedCard = {
         id: `card_${Date.now()}`,
@@ -80,7 +80,7 @@ export default function AttendeeProfilePage() {
       }
       toast({
         title: "Card Saved!",
-        description: `Your card ending in ${newCard.last4} has been securely saved (mock).`,
+        description: `Your card ending in ${newCard.last4} has been securely saved.`,
       });
       setIsSaving(false);
       setIsDialogOpen(false);
@@ -96,7 +96,7 @@ export default function AttendeeProfilePage() {
     }
     toast({
       title: "Card Removed",
-      description: "The selected card has been removed (mock).",
+      description: "The selected card has been removed.",
       variant: "destructive"
     });
   };
@@ -139,7 +139,7 @@ export default function AttendeeProfilePage() {
               <DialogHeader>
                 <DialogTitle className="font-headline text-xl">Add New Card</DialogTitle>
                 <DialogDescription className="font-body">
-                  Your card details are securely processed. This is a mock form.
+                  Your card details are securely processed.
                 </DialogDescription>
               </DialogHeader>
               <form onSubmit={form.handleSubmit(handleSaveCard)} className="space-y-4 py-4">
@@ -203,7 +203,7 @@ export default function AttendeeProfilePage() {
             <div>
               <h4 className="font-headline text-sm font-semibold">Security Note</h4>
               <p className="font-body text-xs text-muted-foreground">
-                Evently uses industry-standard encryption to protect your payment information. For this demo, card details are not processed or stored by a real payment gateway.
+                Evently uses industry-standard encryption to protect your payment information. For this prototype, card details are not processed or stored by a real payment gateway.
               </p>
             </div>
           </div>

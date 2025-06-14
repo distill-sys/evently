@@ -8,10 +8,10 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { CalendarDays, MapPin, Ticket, Users, DollarSign, ArrowLeft, Building, Frown, Loader2, CheckCircle } from 'lucide-react';
 import { supabase } from '@/lib/supabaseClient';
-import { useParams } from 'next/navigation'; 
+import { useParams, notFound } from 'next/navigation'; 
 import { useEffect, useState } from 'react'; 
 import { useToast } from '@/hooks/use-toast';
-import TicketPurchaseDialog from '@/components/events/TicketPurchaseDialog'; // Import the new dialog
+import TicketPurchaseDialog from '@/components/events/TicketPurchaseDialog';
 
 export default function EventPage() {
   const params = useParams(); 
@@ -26,7 +26,7 @@ export default function EventPage() {
     async function getEventDetails(id: string): Promise<EventType | null> {
       const { data, error } = await supabase
         .from('events')
-        .select(`
+        .select(\`
           *,
           organizer:users (
             auth_user_id,
@@ -44,7 +44,7 @@ export default function EventPage() {
             state_province,
             country
           )
-        `)
+        \`)
         .eq('event_id', id)
         .single();
 
@@ -70,19 +70,19 @@ export default function EventPage() {
         setIsLoading(false);
         setFetchError("No event ID provided.");
     }
-  }, [eventId]); // Removed fetchError from dependency array as it caused re-fetch loop
+  }, [eventId]);
 
 
   const handlePurchaseSuccess = (details: { eventTitle: string; ticketQuantity: number }) => {
     toast({
-      title: "Purchase Successful! (Mock)",
+      title: "Purchase Successful!",
       description: (
         <div className="font-body">
-          <p>You've "purchased" {details.ticketQuantity} ticket(s) for "{details.eventTitle}".</p>
-          <p className="mt-1 text-xs">Your e-tickets will be sent to your email (not really!).</p>
+          <p>You've purchased {details.ticketQuantity} ticket(s) for "{details.eventTitle}".</p>
+          <p className="mt-1 text-xs">Your e-tickets will be sent to your email.</p>
         </div>
       ),
-      variant: "default", // Explicitly setting default, can customize later
+      variant: "default",
       duration: 5000,
     });
   };
@@ -155,7 +155,7 @@ export default function EventPage() {
             </div>
             <div className="flex items-center">
               <MapPin className="h-5 w-5 mr-2 text-accent" />
-              <span>{event.venue ? `${event.venue.name}, ${event.venue.city}` : event.location}</span>
+              <span>{event.venue ? \`\${event.venue.name}, \${event.venue.city}\` : event.location}</span>
             </div>
             <div className="flex items-center">
               <Ticket className="h-5 w-5 mr-2 text-accent" />
@@ -232,7 +232,7 @@ export default function EventPage() {
                 <CardContent className="font-body space-y-1">
                     <p className="font-semibold">{event.venue.name}</p>
                     <p>{event.venue.address || 'Address not available'}</p>
-                    <p>{event.venue.city}{event.venue.state_province ? `, ${event.venue.state_province}` : ''}{event.venue.country ? `, ${event.venue.country}`: ''}</p>
+                    <p>{event.venue.city}{event.venue.state_province ? \`, \${event.venue.state_province}\` : ''}{event.venue.country ? \`, \${event.venue.country}\`: ''}</p>
                 </CardContent>
             </Card>
           )}

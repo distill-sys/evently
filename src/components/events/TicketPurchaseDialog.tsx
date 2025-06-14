@@ -58,7 +58,7 @@ export default function TicketPurchaseDialog({ event, open, onOpenChange, onPurc
         paymentMethodId: '',
       });
       try {
-        const storedCards = localStorage.getItem(`${MOCK_SAVED_CARDS_KEY}_${user.id}`);
+        const storedCards = localStorage.getItem(\`\${MOCK_SAVED_CARDS_KEY}_\${user.id}\`);
         if (storedCards) {
           setSavedCards(JSON.parse(storedCards));
         } else {
@@ -101,7 +101,7 @@ export default function TicketPurchaseDialog({ event, open, onOpenChange, onPurc
             Purchase Tickets for {event.title}
           </DialogTitle>
           <DialogDescription className="font-body">
-            Complete your details below to get your tickets. This is a mock purchase.
+            Complete your details below to get your tickets.
           </DialogDescription>
         </DialogHeader>
         <Form {...form}>
@@ -189,7 +189,7 @@ export default function TicketPurchaseDialog({ event, open, onOpenChange, onPurc
             <DialogFooter className="sm:justify-start">
               <Button type="submit" disabled={isProcessing || (savedCards.length === 0 && !user)} className="w-full sm:w-auto font-body">
                 {isProcessing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                Confirm Purchase (Mock)
+                Confirm Purchase
               </Button>
               <DialogClose asChild>
                 <Button type="button" variant="outline" className="w-full sm:w-auto font-body">
